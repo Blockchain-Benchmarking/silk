@@ -2,229 +2,196 @@ package net
 
 
 import (
+	"context"
 	"fmt"
-	"sync/atomic"
+	"math"
 	"testing"
-	"time"
 )
 
 
 // ----------------------------------------------------------------------------
 
 
-var mockResolveProtocol Protocol = NewRawProtocol(nil)
+func testResolverInvalidName(t *testing.T, r Resolver, name string) {
+	var e *ResolverInvalidNameError
+	var err error
+	var ok bool
+
+	_, _, err = r.Resolve(name)
+
+	if err == nil {
+		t.Errorf("Resolve")
+		return
+	}
+
+	e, ok = err.(*ResolverInvalidNameError)
+	if ok == false {
+		t.Errorf("cast")
+		return
+	}
+
+	if e.Name != name {
+		t.Errorf("Name")
+	}
+}
 
 
 // ----------------------------------------------------------------------------
 
 
-func TestTcpResolveEmpty(t *testing.T) {
-	var resolver Resolver
-	var protos []Protocol
-	var routes []Route
-	var err error
-
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
-
-	routes, protos, err = resolver.Resolve("")
-	if (routes != nil) || (protos != nil) || (err == nil) {
-		t.Errorf("resolve should fail")
-	}
-
-	if _, ok := err.(*ResolverInvalidNameError); !ok {
-		t.Errorf("resolve wrong error type: %T", err)
-	}
+func TestTcpResolverEmpty(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol), "")
 }
 
-func TestTcpResolveRandomString(t *testing.T) {
-	var resolver Resolver
-	var protos []Protocol
-	var routes []Route
-	var err error
-
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
-
-	routes, protos, err = resolver.Resolve("Hello World!")
-	if (routes != nil) || (protos != nil) || (err == nil) {
-		t.Errorf("resolve should fail")
-	}
-
-	if _, ok := err.(*ResolverInvalidNameError); !ok {
-		t.Errorf("resolve wrong error type: %T", err)
-	}
+func TestTcpResolverRandom(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol), "Hello World")
 }
 
-func TestTcpResolveIpv4(t *testing.T) {
-	var resolver Resolver
-	var protos []Protocol
-	var routes []Route
-	var err error
-
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
-
-	routes, protos, err = resolver.Resolve("127.0.0.1")
-	if (routes != nil) || (protos != nil) || (err == nil) {
-		t.Errorf("resolve should fail")
-	}
-
-	if _, ok := err.(*ResolverInvalidNameError); !ok {
-		t.Errorf("resolve wrong error type: %T", err)
-	}
+func TestTcpResolverColumn(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol), ":")
 }
 
-func TestTcpResolveIpv4PortUnreachable(t *testing.T) {
-	var resolver Resolver
-	var protos []Protocol
-	var conn Connection
-	var routes []Route
-	var err error
-
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
-
-	addr := fmt.Sprintf("127.0.0.1:%d", findTcpPort(t))
-
-	routes, protos, err = resolver.Resolve(addr)
-	if (routes == nil) || (protos == nil) || (err != nil) {
-		t.Errorf("resolve: %v", err)
-	}
-
-	if len(routes) != 1 {
-		t.Errorf("resolve in too many routes: %v", routes)
-	}
-
-	if len(protos) != 1 {
-		t.Fatalf("resolve in too many protocols: %v", protos)
-	}
-
-	if protos[0] != mockResolveProtocol {
-		t.Errorf("resolve wrong protocol: %v", protos[0])
-	}
-
-	conn, err = routes[0].Accept()
-	if (conn != nil) || (err == nil) {
-		t.Errorf("accept should fail")
-	}
-
-	err = routes[0].Close()
-	if err != nil {
-		t.Errorf("close: %v", err)
-	}
+func TestTcpResolverPortOnly(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol),
+		fmt.Sprintf(":%d", findTcpPort(t)))
 }
 
-func TestTcpResolveHostname(t *testing.T) {
-	var resolver Resolver
-	var protos []Protocol
-	var routes []Route
-	var err error
-
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
-
-	routes, protos, err = resolver.Resolve("localhost")
-	if (routes != nil) || (protos != nil) || (err == nil) {
-		t.Errorf("resolve should fail")
-	}
-
-	if _, ok := err.(*ResolverInvalidNameError); !ok {
-		t.Errorf("resolve wrong error type: %T", err)
-	}
+func TestTcpResolverInvalidPort(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol), ":a12")
 }
 
-func TestTcpResolveHostnamePort(t *testing.T) {
-	var resolver Resolver
-	var protos []Protocol
-	var routes []Route
-	var err error
-
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
-
-	addr := fmt.Sprintf("localhost:%d", findTcpPort(t))
-
-	routes, protos, err = resolver.Resolve(addr)
-	if (routes == nil) || (protos == nil) || (err != nil) {
-		t.Errorf("resolve: %v", err)
-	}
-
-	if len(routes) != 1 {
-		t.Errorf("resolve in too many routes: %v", routes)
-	}
-
-	if len(protos) != 1 {
-		t.Fatalf("resolve in too many protocols: %v", protos)
-	}
-
-	if protos[0] != mockResolveProtocol {
-		t.Errorf("resolve wrong protocol: %v", protos[0])
-	}
+func TestTcpResolverPortTooBig(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol),
+		fmt.Sprintf(":%d", math.MaxUint16 + 1))
 }
 
-func TestTcpResolveHanging(t *testing.T) {
-	const timeout = 30 * time.Millisecond
-	var resolver Resolver
-	var protos []Protocol
-	var flag atomic.Bool
-	var routes []Route
-	var err error
+func TestTcpResolverHostOnly(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol), "localhost")
+}
 
-	resolver = NewTcpResolver(mockResolveProtocol)
-	if resolver == nil {
-		t.Fatalf("new: %v", err)
-	}
+func TestTcpResolverHostColumnOnly(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol), "localhost:")
+}
 
-	addr := "1.1.1.1:1"
+func TestTcpResolverHostInvalidPort(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol),
+		"localhost:a12")
+}
 
-	routes, protos, err = resolver.Resolve(addr)
-	if (routes == nil) || (protos == nil) || (err != nil) {
-		t.Errorf("resolve: %v", err)
-	}
+func TestTcpResolverHostPortTooBig(t *testing.T) {
+	testResolverInvalidName(t, NewTcpResolver(mockProtocol),
+		fmt.Sprintf("localhost:%d", math.MaxUint16 + 1))
+}
 
-	if len(routes) != 1 {
-		t.Errorf("resolve in too many routes: %v", routes)
-	}
+func TestTcpResolverLocalhost(t *testing.T) {
+	testRoute(t, func () *routeTestSetup {
+		var r Resolver = NewTcpResolver(mockProtocol)
+		var port uint16 = findTcpPort(t)
+		var cancel context.CancelFunc
+		var ctx context.Context
+		var ps []Protocol
+		var c Connection
+		var s Accepter
+		var rs []Route
+		var more bool
+		var err error
 
-	if len(protos) != 1 {
-		t.Fatalf("resolve in too many protocols: %v", protos)
-	}
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(fmt.Sprintf(":%d", port),
+			&TcpServerOptions{ Context: ctx })
 
-	if protos[0] != mockResolveProtocol {
-		t.Errorf("resolve wrong protocol: %v", protos[0])
-	}
+		rs, ps, err = r.Resolve(fmt.Sprintf("localhost:%d", port))
 
-	errc := make(chan error)
-	t0 := time.AfterFunc(timeout, func () {
-		flag.Store(true)
-		errc <- routes[0].Close()
+		if err != nil {
+			t.Fatalf("Resolve")
+		}
+
+		if (ps == nil) || (len(ps) != 1) || (ps[0] != mockProtocol) {
+			t.Fatalf("[]Protocol")
+		}
+
+		if (rs == nil) || (len(rs) != 1) {
+			t.Fatalf("[]Route")
+		}
+
+		c, more = <-s.Accept()
+		if more == false {
+			t.Fatalf("Accept")
+		}
+
+		return &routeTestSetup{
+			route: rs[0],
+			conns: []Connection{ c },
+			teardown: cancel,
+		}
 	})
+}
 
-	conn, err := routes[0].Accept()
-	if flag.Load() == false {
-		t.Errorf("accept should hang")
-	}
-	if (conn != nil) || (err == nil) {
-		t.Errorf("accept should fail: %v %v", conn, err)
-	}
+func TestTcpResolverUnreachable(t *testing.T) {
+	var r Resolver = NewTcpResolver(mockProtocol)
+	var ps []Protocol
+	var c Connection
+	var rs []Route
+	var more bool
+	var err error
 
-	t0.Stop()
+	rs, ps, err = r.Resolve(findTcpAddr(t))
 
-	err = <-errc
 	if err != nil {
-		t.Errorf("route close: %v", err)
+		t.Fatalf("Resolve")
 	}
+
+	if (ps == nil) || (len(ps) != 1) || (ps[0] != mockProtocol) {
+		t.Fatalf("[]Protocol")
+	}
+
+	if (rs == nil) || (len(rs) != 1) {
+		t.Fatalf("[]Route")
+	}
+
+	defer close(rs[0].Send())
+
+	c, more = <-rs[0].Accept()
+	if more == false {
+		t.Fatalf("Accept")
+	}
+
+	defer close(c.Send())
+
+	_, more = <-c.Recv(mockProtocol)
+	if more {
+		t.Fatalf("Recv")
+	}
+}
+
+func TestTcpResolverUnresolvableAddr(t *testing.T) {
+	var r Resolver = NewTcpResolver(mockProtocol)
+	var ps []Protocol
+	var c Connection
+	var rs []Route
+	var more bool
+	var err error
+
+	rs, ps, err = r.Resolve(findUnresolvableAddr(t))
+
+	if err != nil {
+		t.Fatalf("Resolve")
+	}
+
+	if (ps == nil) || (len(ps) != 1) || (ps[0] != mockProtocol) {
+		t.Fatalf("[]Protocol")
+	}
+
+	if (rs == nil) || (len(rs) != 1) {
+		t.Fatalf("[]Route")
+	}
+
+	defer close(rs[0].Send())
+
+	c, more = <-rs[0].Accept()
+	if more == false {
+		t.Fatalf("Accept")
+	}
+
+	close(c.Send())
 }

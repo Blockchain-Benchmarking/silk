@@ -3,245 +3,124 @@ package net
 
 import (
 	"context"
-	"fmt"
-	sio "silk/io"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
 
 // ----------------------------------------------------------------------------
 
 
-var mockConnectionProtocol Protocol = NewRawProtocol(&mockConnectionMessage{})
+func TestTcpConnectionEmptyAddr(t *testing.T) {
+	var c Connection
+	var more bool
 
+	c = NewTcpConnection("")
 
-type mockConnectionMessage struct {
-	value uint64
+	c.Send() <- MessageProtocol{ &mockMessage{}, mockProtocol }
+
+	_, more = <-c.Recv(mockProtocol)
+	if more {
+		t.Fatal("Recv")
+	}
+
+	_, more = <-c.RecvN(mockProtocol, 10)
+	if more {
+		t.Fatal("RecvN")
+	}
+
+	close(c.Send())
 }
 
-func (this *mockConnectionMessage) Encode(sink sio.Sink) error {
-	return sink.WriteUint64(this.value).Error()
+func TestTcpConnectionUnreachable(t *testing.T) {
+	var c Connection
+	var more bool
+
+	c = NewTcpConnection(findTcpAddr(t))
+
+	c.Send() <- MessageProtocol{ &mockMessage{}, mockProtocol }
+
+	_, more = <-c.Recv(mockProtocol)
+	if more {
+		t.Fatal("Recv")
+	}
+
+	_, more = <-c.RecvN(mockProtocol, 10)
+	if more {
+		t.Fatal("RecvN")
+	}
+
+	close(c.Send())
 }
 
-func (this *mockConnectionMessage) Decode(source sio.Source) error {
-	return source.ReadUint64(&this.value).Error()
+func TestTcpConnectionUnresolvable(t *testing.T) {
+	var c Connection
+
+	c = NewTcpConnection(findUnresolvableAddr(t))
+
+	close(c.Send())
 }
 
+func TestTcpConnectionSender(t *testing.T) {
+	testSender(t, func () *senderTestSetup {
+		var addr string = findTcpAddr(t)
+		var cancel context.CancelFunc
+		var ctx context.Context
+		var recvc <-chan Message
+		var c, a Connection
+		var s Accepter
 
-func runEchoServer(server Server) {
-	var conn Connection
-	var msg Message
-	var err error
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
+		c = NewTcpConnection(addr)
+		a = <-s.Accept()
 
-	conn, err = server.Accept()
-	if (conn == nil) || (err != nil) {
-		return
-	}
-
-	defer conn.Close()
-
-	msg, err = conn.Recv(mockConnectionProtocol)
-	if (msg == nil) || (err != nil) {
-		return
-	}
-
-	conn.Send(msg, mockConnectionProtocol)
-}
-
-
-// ----------------------------------------------------------------------------
-
-
-func TestTcpConnectionEmpty(t *testing.T) {
-	var conn Connection
-	var err error
-
-	conn, err = NewTcpConnection("")
-	if (conn != nil) || (err == nil) {
-		t.Errorf("new should fail")
-	}
-}
-
-func TestTcpConnectionRandomString(t *testing.T) {
-	var conn Connection
-	var err error
-
-	conn, err = NewTcpConnection("Hello World!")
-	if (conn != nil) || (err == nil) {
-		t.Errorf("new should fail")
-	}
-}
-
-func TestTcpConnectionIpv4(t *testing.T) {
-	var conn Connection
-	var err error
-
-	conn, err = NewTcpConnection("127.0.0.1")
-	if (conn != nil) || (err == nil) {
-		t.Errorf("new should fail")
-	}
-}
-
-func TestTcpConnectionIpv4PortUnreachable(t *testing.T) {
-	var conn Connection
-	var err error
-
-	addr := fmt.Sprintf("127.0.0.1:%d", findTcpPort(t))
-
-	conn, err = NewTcpConnection(addr)
-	if (conn != nil) || (err == nil) {
-		t.Errorf("new should fail")
-	}
-}
-
-func TestTcpConnectionIpv4Port(t *testing.T) {
-	var conn Connection
-	var msg Message
-	var err error
-
-	addr := fmt.Sprintf("127.0.0.1:%d", findTcpPort(t))
-	server, err := NewTcpServer(addr)
-	if (server == nil) || (err != nil) {
-		t.Fatalf("new server: %v", err)
-	}
-	defer server.Close()
-	go runEchoServer(server)
-
-	conn, err = NewTcpConnection(addr)
-	if (conn == nil) || (err != nil) {
-		t.Fatalf("new: %v", err)
-	}
-
-	err = conn.Send(&mockConnectionMessage{}, mockConnectionProtocol)
-	if err != nil {
-		t.Errorf("send: %v", err)
-	}
-
-	msg, err = conn.Recv(mockConnectionProtocol)
-	if (msg == nil) || (err != nil) {
-		t.Errorf("recv: %v", err)
-	}
-
-	err = conn.Close()
-	if err != nil {
-		t.Errorf("close: %v", err)
-	}
-}
-
-func TestTcpConnectionIpv4PortHanging(t *testing.T) {
-	const timeout = 30 * time.Millisecond
-	var flag atomic.Bool
-	var conn Connection
-	var msg Message
-	var err error
-
-	addr := fmt.Sprintf("127.0.0.1:%d", findTcpPort(t))
-	server, err := NewTcpServer(addr)
-	if (server == nil) || (err != nil) {
-		t.Fatalf("new server: %v", err)
-	}
-	defer server.Close()
-
-	t0 := time.AfterFunc(timeout, func () {
-		flag.Store(true)
-		runEchoServer(server)
-	})
-
-	conn, err = NewTcpConnection(addr)
-	if (conn == nil) || (err != nil) {
-		t.Fatalf("new: %v", err)
-	}
-
-	err = conn.Send(&mockConnectionMessage{}, mockConnectionProtocol)
-	if err != nil {
-		t.Errorf("send: %v", err)
-	}
-
-	msg, err = conn.Recv(mockConnectionProtocol)
-	if (msg == nil) || (err != nil) {
-		t.Errorf("recv: %v", err)
-	}
-
-	if flag.Load() == false {
-		t.Errorf("connection should hang")
-	}
-
-	t0.Stop()
-
-	err = conn.Close()
-	if err != nil {
-		t.Errorf("close: %v", err)
-	}
-}
-
-func TestTcpConnectionIpv4PortHangingClose(t *testing.T) {
-	const timeout = 30 * time.Millisecond
-	var flag atomic.Bool
-	var conn Connection
-	var msg Message
-	var err error
-
-	addr := fmt.Sprintf("127.0.0.1:%d", findTcpPort(t))
-	server, err := NewTcpServer(addr)
-	if (server == nil) || (err != nil) {
-		t.Fatalf("new server: %v", err)
-	}
-	defer server.Close()
-
-	t0 := time.AfterFunc(timeout, func () {
-		flag.Store(true)
-		server.Close()
-	})
-
-	conn, err = NewTcpConnection(addr)
-	if conn != nil {
-		if err != nil {
-			t.Errorf("new is contradictory: %v", err)
+		if a == nil {
+			ac := make(chan Message) ; close(ac)
+			recvc = ac
+		} else {
+			recvc = a.Recv(mockProtocol)
 		}
 
-		conn.Send(&mockConnectionMessage{}, mockConnectionProtocol)
-
-		msg, err = conn.Recv(mockConnectionProtocol)
-		if (msg != nil) || (err == nil) {
-			t.Errorf("recv should fail: %#v %v", msg, err)
+		return &senderTestSetup{
+			sender: c,
+			recvc: recvc,
+			teardown: func () {
+				cancel()
+				close(a.Send())
+			},
 		}
-	} else if err == nil {
-		t.Errorf("new is contradictory")
-	}
-
-	if flag.Load() == false {
-		t.Errorf("connection should hang")
-	}
-
-	t0.Stop()
+	})
 }
 
-func TestTcpConnectionHangingCancel(t *testing.T) {
-	const timeout = 30 * time.Millisecond
-	var cancel context.CancelFunc
-	const addr = "1.1.1.1:1"
-	var ctx context.Context
-	var flag atomic.Bool
-	var conn Connection
-	var err error
+func TestTcpConnectionReceiver(t *testing.T) {
+	testReceiver(t, func () *receiverTestSetup {
+		var addr string = findTcpAddr(t)
+		var sendc chan<- MessageProtocol
+		var cancel context.CancelFunc
+		var ctx context.Context
+		var c, a Connection
+		var s Accepter
 
-	ctx, cancel = context.WithCancel(context.Background())
-	t0 := time.AfterFunc(timeout, func () {
-		flag.Store(true)
-		cancel()
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
+		c = NewTcpConnection(addr)
+		a = <-s.Accept()
+
+		if a == nil {
+			ac := make(chan MessageProtocol)
+			go func () { for _ = range ac {} }()
+			sendc = ac
+		} else {
+			sendc = a.Send()
+		}
+
+		return &receiverTestSetup{
+			receiver: c,
+			sendc: sendc,
+			teardown: func () {
+				cancel()
+				close(c.Send())
+			},
+		}
 	})
-
-	conn, err = NewTcpConnectionWith(addr, &TcpConnectionOptions{
-		Context: ctx,
-	})
-	if flag.Load() == false {
-		t.Errorf("new should hang")
-	}
-	if (conn != nil) || (err == nil) {
-		t.Errorf("new should fail")
-	}
-
-	t0.Stop()
 }

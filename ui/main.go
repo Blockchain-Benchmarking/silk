@@ -4,7 +4,7 @@ package main
 import (
 	sio "silk/io"
 	"silk/net"
-	"sync"
+	// "sync"
 	"time"
 )
 
@@ -16,136 +16,302 @@ var mainProtocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
 
 
 type mainMessage struct {
+	value uint64
 }
 
 func (this *mainMessage) Encode(sink sio.Sink) error {
-	return sink.Error()
+	return sink.WriteUint64(this.value).Error()
 }
 
 func (this *mainMessage) Decode(source sio.Source) error {
-	return source.Error()
+	return source.ReadUint64(&this.value).Error()
 }
 
 
-func relay(addr string, log sio.Logger) {
-	var nchan net.ServerMessageChannel
-	var cmsg net.ConnectionMessage
-	var routing net.RoutingService
-	var resolver net.Resolver
-	var network net.Server
-	var wg sync.WaitGroup
-	var err error
+// func relay(addr string, log sio.Logger) {
+// 	var routing net.RoutingService
+// 	var resolver net.Resolver
+// 	var network net.Accepter
+// 	var conn net.Connection
+// 	var wg sync.WaitGroup
 
-	network, err = net.NewTcpServer(addr)
-	if err != nil {
-		panic(err)
-	}
+// 	network = net.NewTcpServer(addr)
+
+// 	log.Info("running")
+
+// 	resolver = net.NewTcpResolver(mainProtocol)
+// 	routing = net.NewRoutingServiceWith(resolver,
+// 		&net.RoutingServiceOptions{
+// 			Log: log.WithLocalContext("route"),
+// 		})
+
+// 	go func () {
+// 		for _ = range routing.Accept() {
+// 			log.Warn("unexpected routing connection")
+// 		}
+// 	}()
+
+// 	for conn = range network.Accept() {
+// 		wg.Add(1)
+
+// 		go func (conn net.Connection) {
+// 			var msg net.Message
+
+// 			log.Info("new connection")
+
+// 			msg = <-conn.RecvN(mainProtocol, 1)
+
+// 			log.Info("new request")
+
+// 			if msg != nil {
+// 				routing.Handle(msg.(*net.RoutingMessage), conn)
+// 			}
+
+// 			wg.Done()
+// 		}(conn)
+// 	}
+
+// 	wg.Wait()
+
+// 	log.Info("terminate")
+// }
+
+
+// func serve(addr string, log sio.Logger) {
+// 	var routing net.RoutingService
+// 	var resolver net.Resolver
+// 	var network net.Accepter
+// 	var conn net.Connection
+// 	var wg sync.WaitGroup
+
+// 	network = net.NewTcpServer(addr)
+
+// 	log.Info("running")
+
+// 	resolver = net.NewTcpResolver(mainProtocol)
+// 	routing = net.NewRoutingServiceWith(resolver,
+// 		&net.RoutingServiceOptions{
+// 			Log: log.WithLocalContext("route"),
+// 		})
+
+// 	for conn = range net.AcceptAll(network, routing) {
+// 		wg.Add(1)
+
+// 		go func (conn net.Connection) {
+// 			var msg net.Message
+
+// 			log.Info("new connection")
+
+// 			msg = <-conn.RecvN(mainProtocol, 1)
+
+// 			switch m := msg.(type) {
+// 			case *net.RoutingMessage:
+// 				log.Info("new routing request")
+// 				routing.Handle(m, conn)
+// 			case *mainMessage:
+// 				log.Info("new application message")
+// 				conn.Send() <- net.MessageProtocol{
+// 					M: m,
+// 					P: mainProtocol,
+// 				}
+// 				close(conn.Send())
+// 			}
+
+// 			wg.Done()
+// 		}(conn)
+// 	}
+
+// 	wg.Wait()
+
+// 	log.Info("terminate")
+// }
+
+func relay(addr string, log sio.Logger) {
+	var rs net.RoutingService
+	var m *net.RoutingMessage
+	var res net.Resolver
+	var c net.Connection
+	var msg net.Message
+	var s net.Accepter
+	var more, ok bool
+
+	s = net.NewTcpServer(addr)
 
 	log.Info("running")
 
-	resolver = net.NewTcpResolverWith(mainProtocol,
-		&net.TcpResolverOptions{
-			Log: log.WithLocalContext("resolve"),
-		})
+	res = net.NewGroupResolver(net.NewTcpResolver(mainProtocol))
+	rs = net.NewRoutingServiceWith(res, &net.RoutingServiceOptions{
+		Log: log.WithLocalContext("route"),
+	})
 
-	routing = net.NewRoutingServiceWith(resolver,
-		&net.RoutingServiceOptions{
-			Log: log.WithLocalContext("route"),
-		})
+	for c = range s.Accept() {
+		log.Info("new connection")
+		
+		msg, more = <-c.RecvN(mainProtocol, 1)
+		if more == false {
+			close(c.Send())
+			continue
+		}
 
-	nchan = net.NewServerMessageChannel(network, mainProtocol)
+		log.Info("new request")
 
-	for cmsg = range nchan.Accept() {
-		log.Trace("accept")
+		m, ok = msg.(*net.RoutingMessage)
+		if ok == false {
+			close(c.Send())
+			continue
+		}
 
-		wg.Add(1)
-		go func (msg *net.RoutingMessage, conn net.Connection) {
-			routing.Handle(msg, conn)
-			wg.Done()
-		}(cmsg.Message().(*net.RoutingMessage), cmsg.Connection())
+		log.Info("routing request")
+
+		go rs.Handle(m, c)
 	}
+}
 
-	if nchan.Err() != nil {
-		panic(nchan.Err())
+
+func serve(addr string, log sio.Logger) {
+	var rs net.RoutingService
+	var m *net.RoutingMessage
+	var res net.Resolver
+	var c net.Connection
+	var msg net.Message
+	var s net.Accepter
+	var more, ok bool
+
+	s = net.NewTcpServer(addr)
+
+	log.Info("running")
+
+	res = net.NewTcpResolver(mainProtocol)
+	rs = net.NewRoutingServiceWith(res, &net.RoutingServiceOptions{
+		Log: log.WithLocalContext("route"),
+	})
+
+	go func () {
+		var c net.Connection
+		var msg net.Message
+		var m *mainMessage
+		var more, ok bool
+
+		for c = range rs.Accept() {
+			log.Info("new routed connection")
+
+			msg, more = <-c.RecvN(mainProtocol, 1)
+			if more == false {
+				log.Info("routed connection closes")
+				close(c.Send())
+				continue
+			}
+
+			log.Info("new request %v", msg)
+
+			m, ok = msg.(*mainMessage)
+			if ok == false {
+				close(c.Send())
+				continue
+			}
+
+			log.Info("application request")
+
+			c.Send() <- net.MessageProtocol{
+				M: &mainMessage{ m.value + 1 },
+				P: mainProtocol,
+			}
+
+			log.Info("send application reply")
+
+			close(c.Send())
+		}
+	}()
+
+	for c = range s.Accept() {
+		log.Info("new connection")
+		
+		msg, more = <-c.RecvN(mainProtocol, 1)
+		if more == false {
+			close(c.Send())
+			continue
+		}
+
+		log.Info("new request")
+
+		m, ok = msg.(*net.RoutingMessage)
+		if ok == false {
+			close(c.Send())
+			continue
+		}
+
+		log.Info("routing request")
+
+		go rs.Handle(m, c)
 	}
-
-	wg.Wait()
-
-	log.Info("terminate")
 }
 
 
 func main() {
 	var log sio.Logger = sio.NewStderrLogger(sio.LOG_TRACE)
-	var nchan, rchan net.ServerMessageChannel
-	var routing net.RoutingService
 	var resolver net.Resolver
-	var conn net.Connection
-	var network net.Server
+	var c0, c1 net.Connection
 	var route net.Route
-	var err error
+
+	go relay(":3200", log.WithGlobalContext("r:3200"))
+	// go relay(":3201", log.WithGlobalContext("r:3201"))
+	// go relay(":3202", log.WithGlobalContext("r:3201"))
+	// go relay(":3203", log.WithGlobalContext("r:3201"))
+	// go relay(":3204", log.WithGlobalContext("r:3201"))
+	go serve(":3201", log.WithGlobalContext("s:3201"))
+	go serve(":3202", log.WithGlobalContext("s:3202"))
+	log = log.WithGlobalContext("client")
+
+	time.Sleep(10 * time.Millisecond)
 
 	resolver = net.NewTcpResolver(mainProtocol)
-	routing = net.NewRoutingServiceWith(resolver,
-		&net.RoutingServiceOptions{
-			Log: log.WithGlobalContext("3200"),
-		})
-	network, err = net.NewTcpServer(":3200")
-	if err != nil {
-		panic(err)
+	route = net.NewRouteWith([]string{
+		"localhost:3200", "localhost:3201+localhost:3202",
+	}, resolver, &net.RouteOptions{
+		Log: log.WithLocalContext("route"),
+	})
+
+	// route.Send() <- net.MessageProtocol{ &mainMessage{}, mainProtocol }
+	// log.Info("sent")
+
+	c0 = <-route.Accept()
+	if c0 == nil {
+		panic("accept0")
 	}
+	log.Info("accepted0")
 
-	nchan = net.NewServerMessageChannel(network, mainProtocol)
-	rchan = net.NewServerMessageChannel(routing, mainProtocol)
-
-	go func () {
-		var cmsg net.ConnectionMessage
-
-		for {
-			select {
-			case cmsg = <-nchan.Accept():
-			case cmsg = <-rchan.Accept():
-			}
-
-			log.Info("got %T:%v", cmsg.Message(), cmsg.Message())
-
-			switch m := cmsg.Message().(type) {
-			case *net.RoutingMessage:
-				go routing.Handle(m, cmsg.Connection())
-			case *mainMessage:
-				cmsg.Connection().Send(m, mainProtocol)
-				cmsg.Connection().Close()
-			}
-		}
-	}()
-
-	go relay(":3201", log.WithGlobalContext("3201"))
+	c1 = <-route.Accept()
+	if c1 == nil {
+		panic("accept1")
+	}
+	log.Info("accepted1")
 
 	time.Sleep(10 * time.Millisecond)
 
-	route, err = net.NewRouteWith([]string{ "localhost:3201", "localhost:3200" }, resolver, &net.RouteOptions{ log.WithGlobalContext("0000").WithLocalContext("route") })
-	if err != nil {
-		panic(err)
-	}
+	c0.Send() <- net.MessageProtocol{ &mainMessage{10}, mainProtocol }
+	log.Info("sent0")
+	c1.Send() <- net.MessageProtocol{ &mainMessage{20}, mainProtocol }
+	log.Info("sent1")
 
 	time.Sleep(10 * time.Millisecond)
 
-	err = route.Send(&mainMessage{}, mainProtocol)
-	if err != nil {
-		panic(err)
+	m := <-c0.RecvN(mainProtocol, 1)
+	if m == nil {
+		panic("receive0")
 	}
+	log.Info("received0 %v", m)
 
-	time.Sleep(10 * time.Millisecond)
-
-	conn, err = route.Accept()
-	if err != nil {
-		panic(err)
+	m = <-c1.RecvN(mainProtocol, 1)
+	if m == nil {
+		panic("receive1")
 	}
+	log.Info("received1 %v", m)
 
-	_, err = conn.Recv(mainProtocol)
-	if err != nil {
-		panic(err)
-	}
+	time.Sleep(100 * time.Millisecond)
 
-	route.Close()
+	close(c0.Send())
+	close(c1.Send())
+	close(route.Send())
+
+	time.Sleep(100 * time.Millisecond)
 }

@@ -16,15 +16,25 @@ type Message interface {
 	io.Encodable
 }
 
+
 type Protocol interface {
 	Encode(io.Sink, Message) error
 	Decode(io.Source) (Message, error)
 }
 
 
+// A trivial pair of `Message` and `Protocol`.
+//
+type MessageProtocol struct {
+	M Message
+	P Protocol
+}
+
+
 func NewRawProtocol(recv Message) Protocol {
 	return newRawProtocol(recv)
 }
+
 
 func NewUint8Protocol(hmap map[uint8]Message) Protocol {
 	return newUint8Protocol(hmap)
