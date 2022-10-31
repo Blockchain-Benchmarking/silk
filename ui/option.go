@@ -75,7 +75,9 @@ type OptionUnary interface {
 //
 type OptionVariadic interface {
 	OptionNullary
-	OptionUnary
+
+	// OptionUnary   -   disabled for compatilibity with go 1.13
+	AssignValue(string, ParsingState) error
 }
 
 
