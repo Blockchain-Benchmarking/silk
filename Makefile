@@ -1,6 +1,7 @@
 export GOPATH=$(PWD)/.go/
 
-modules := core io net run ui
+modules := io net run ui
+mains := main run server
 
 T ?= $(modules)
 V := 1
@@ -21,7 +22,7 @@ endif
 all: bin/silk
 
 check: bin/silk
-	./$<
+	./$< run "localhost:3200,(localhost:3201|localhost:3202)" ls
 
 test:
 	go test $(test_verbosity_options) -count=1 $(test_parameters)
@@ -30,8 +31,9 @@ bench:
 	go test $(test_verbosity_options) -bench=. $(addprefix ./, $(T))
 
 
-bin/silk: $(foreach d, $(modules), $(wildcard $(d)/*.go))
-	go build -v -race -o $@ ./ui
+bin/silk: $(addsuffix .go, $(mains)) \
+          $(foreach d, $(modules), $(wildcard $(d)/*.go))
+	go build -v -race -o $@ $(addsuffix .go, $(mains))
 
 
 clean:
