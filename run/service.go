@@ -9,9 +9,9 @@ import (
 	"os/exec"
 	sio "silk/io"
 	"silk/net"
+	"silk/util/atomic"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 

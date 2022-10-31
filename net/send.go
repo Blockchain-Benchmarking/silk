@@ -2,7 +2,7 @@ package net
 
 
 import (
-	"sync/atomic"
+	"silk/util/atomic"
 )
 
 

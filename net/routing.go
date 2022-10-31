@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"math"
 	sio "silk/io"
+	"silk/util/atomic"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 
