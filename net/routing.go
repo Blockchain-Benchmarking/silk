@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	sio "silk/io"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -144,22 +145,57 @@ func (this *routingService) Handle(msg *RoutingMessage, conn Connection) {
 
 	log = this.log.WithLocalContext("relay[%d]", this.nextId.Add(1) - 1)
 
-	log.Debug("connect: %s", log.Emph(0, msg.names[0]))
-	routes, protos, err = this.resolver.Resolve(msg.names[0])
-	if err != nil {
-		log.Warn("%s", err.Error())
+	var nexts [][]string
+	var parts []string
+	var rs []Route
+	var i int
+
+	parts, nexts = resolveRoutingExpr(msg.names[0])
+	for i = range parts {
+		log.Debug("connect: %s", log.Emph(0, parts[i]))
+		routes, protos, err = this.resolver.Resolve(parts[i])
+		if err != nil {
+			log.Warn("%s", err.Error())
+			continue
+		}
+
+		log.Debug("request: %v", log.Emph(0,
+			append(nexts[i], msg.names[1:]...)))
+		route = newRequestRoute(append(nexts[i], msg.names[1:]...),
+			routes, protos)
+
+		if len(msg.names) > 1 {
+			route = newDispatchRoute(route, log)
+		}
+
+		rs = append(rs, route)
+	}
+
+	if len(rs) == 0 {
 		close(conn.Send())
 		return
 	}
 
-	log.Debug("request: %v", log.Emph(0, msg.names[1:]))
-	route = newRequestRoute(msg.names[1:], routes, protos)
-
-	if len(msg.names) > 1 {
-		route = newDispatchRoute(route, log)
-	}
+	route = NewSliceCompositeRoute(rs)
 
 	newRelay(conn, route, log).run()
+
+	// log.Debug("connect: %s", log.Emph(0, msg.names[0]))
+	// routes, protos, err = this.resolver.Resolve(msg.names[0])
+	// if err != nil {
+	// 	log.Warn("%s", err.Error())
+	// 	close(conn.Send())
+	// 	return
+	// }
+
+	// log.Debug("request: %v", log.Emph(0, msg.names[1:]))
+	// route = newRequestRoute(msg.names[1:], routes, protos)
+
+	// if len(msg.names) > 1 {
+	// 	route = newDispatchRoute(route, log)
+	// }
+
+	// newRelay(conn, route, log).run()
 }
 
 func (this *routingService) Accept() <-chan Connection {
@@ -180,24 +216,106 @@ func newRoute(names []string, r Resolver, opts *RouteOptions) Route {
 		return NewSliceLeafRoute([]Connection{})
 	}
 
-	opts.Log.Debug("connect: %s", opts.Log.Emph(0, names[0]))
-	routes, protos, err = r.Resolve(names[0])
-	if err != nil {
-		return NewSliceLeafRoute([]Connection{})
+	var nexts [][]string
+	var parts []string
+	var rs []Route
+	var i int
+
+	parts, nexts = resolveRoutingExpr(names[0])
+	for i = range parts {
+		opts.Log.Debug("connect: %s", opts.Log.Emph(0, parts[i]))
+		routes, protos, err = r.Resolve(parts[i])
+		if err != nil {
+			continue
+		}
+
+		if (len(nexts[i]) + len(names[1:])) == 0 {
+			if len(routes) == 1 {
+				rs = append(rs, routes[0])
+			} else {
+				rs = append(rs, NewSliceCompositeRoute(routes))
+			}
+
+			continue
+		}
+
+		opts.Log.Debug("request: %v", opts.Log.Emph(0,
+			append(nexts[i], names[1:]...)))
+		route = newRequestRoute(append(nexts[i], names[1:]...),
+			routes, protos)
+		route = newDispatchRoute(route, opts.Log)
+		rs = append(rs, newEndpointRoute(route,
+			opts.Log.WithLocalContext("()")))
 	}
 
-	if len(names) == 1 {
-		if len(routes) == 1 {
-			return routes[0]
+	return NewSliceCompositeRoute(rs)
+		
+	// opts.Log.Debug("connect: %s", opts.Log.Emph(0, names[0]))
+	// routes, protos, err = r.Resolve(names[0])
+	// if err != nil {
+	// 	return NewSliceLeafRoute([]Connection{})
+	// }
+
+	// if len(names) == 1 {
+	// 	if len(routes) == 1 {
+	// 		return routes[0]
+	// 	} else {
+	// 		return NewSliceCompositeRoute(routes)
+	// 	}
+	// }
+
+	// opts.Log.Debug("request: %v", opts.Log.Emph(0, names[1:]))
+	// route = newRequestRoute(names[1:], routes, protos)
+	// route = newDispatchRoute(route, opts.Log)
+	// return newEndpointRoute(route, opts.Log.WithLocalContext("()"))
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+// This is crappy as fuck but only temporary.
+//
+func resolveRoutingExpr(expr string) ([]string, [][]string) {
+	var start, i, index, lvl int
+	var nexts [][]string
+	var parts []string
+	var part string
+	var c rune
+
+	if strings.HasPrefix(expr, "(") {
+		expr = expr[1:]
+
+		lvl = 0
+		start = 0
+
+		for index, c = range expr {
+			if (lvl == 0) && ((c == '|') || (c == ')')) {
+				parts = append(parts, expr[start:index])
+				start = index + 1
+			}
+
+			if c == '(' {
+				lvl += 1
+			} else if c == ')' {
+				lvl -= 1
+			}
+		}
+	} else {
+		parts = []string{ expr }
+	}
+
+	for i, part = range parts {
+		index = strings.Index(part, ",")
+		if index == -1 {
+			nexts = append(nexts, []string{})
 		} else {
-			return NewSliceCompositeRoute(routes)
+			nexts = append(nexts, []string{ part[index+1:] })
+			parts[i] = part[:index]
 		}
 	}
 
-	opts.Log.Debug("request: %v", opts.Log.Emph(0, names[1:]))
-	route = newRequestRoute(names[1:], routes, protos)
-	route = newDispatchRoute(route, opts.Log)
-	return newEndpointRoute(route, opts.Log.WithLocalContext("()"))
+	return parts, nexts
 }
 
 
