@@ -69,6 +69,8 @@ type Message struct {
 	name string
 
 	args []string
+
+	cwd string
 }
 
 
@@ -79,6 +81,8 @@ const MaxJobNameLength = math.MaxUint16
 const MaxJobArguments = math.MaxUint16
 
 const MaxJobArgumentLength = math.MaxUint16
+
+const MaxJobPathLength = math.MaxUint16
 
 
 type ServiceNameTooLongError struct {
@@ -95,6 +99,10 @@ type JobTooManyArgumentsError struct {
 
 type JobArgumentTooLongError struct {
 	Arg string
+}
+
+type JobPathTooLongError struct {
+	Path string
 }
 
 
@@ -167,6 +175,8 @@ func (this *serviceProcess) run() {
 
 	proc, err = NewProcessWith(this.req.name,this.req.args,&ProcessOptions{
 		Log: this.log,
+
+		Cwd: this.req.cwd,
 
 		Stdout: func (b []byte) error {
 			this.conn.Send() <- net.MessageProtocol{
@@ -294,6 +304,10 @@ func (this *Message) check() error {
 		}
 	}
 
+	if len(this.cwd) > MaxJobPathLength {
+		return &JobPathTooLongError{ this.cwd }
+	}
+
 	return nil
 }
 
@@ -306,6 +320,8 @@ func (this *Message) Encode(sink sio.Sink) error {
 	for i = range this.args {
 		sink = sink.WriteString16(this.args[i])
 	}
+
+	sink = sink.WriteString16(this.cwd)
 
 	return sink.Error()
 }
@@ -323,7 +339,9 @@ func (this *Message) Decode(source sio.Source) error {
 			}
 
 			return source.Error()
-		}).Error()
+		}).
+		ReadString16(&this.cwd).
+		Error()
 }
 
 
@@ -474,4 +492,8 @@ func (this *JobTooManyArgumentsError) Error() string {
 
 func (this *JobArgumentTooLongError) Error() string {
 	return fmt.Sprintf("job argument too long: %s", this.Arg)
+}
+
+func (this *JobPathTooLongError) Error() string {
+	return fmt.Sprintf("job path too long: %s", this.Path)
 }

@@ -21,6 +21,8 @@ type Job interface {
 
 type JobOptions struct {
 	Log sio.Logger
+
+	Cwd string
 }
 
 
@@ -65,6 +67,7 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 
 	m.name = name
 	m.args = args
+	m.cwd = opts.Cwd
 
 	err = m.check()
 	if err != nil {

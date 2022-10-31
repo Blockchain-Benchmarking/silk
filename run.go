@@ -15,10 +15,15 @@ import (
 
 
 func runUsage() {
-	fmt.Printf(`Usage: %s run <route> <cmd> [<args>]
+	fmt.Printf(`Usage: %s run [-C<path> | --cwd=<path>] <route> <cmd> [<args>]
 
 Run a command on remote server.
 The <route> indicate on what remote server to run the command.
+
+Options:
+
+  -C<path>, --cwd=<path>      Change current directory to the given <path>
+                              before to run the command.
 
 `, os.Args[0])
 }
@@ -27,7 +32,7 @@ The <route> indicate on what remote server to run the command.
 // ----------------------------------------------------------------------------
 
 
-func runCommand(route, name string, args []string, log sio.Logger) {
+func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 	var resolver net.Resolver
 	var nroute net.Route
 	var agent run.Agent
@@ -41,6 +46,8 @@ func runCommand(route, name string, args []string, log sio.Logger) {
 	nroute = net.NewRoute([]string{ route }, resolver)
 	job = run.NewJobWith(name, args, nroute, protocol, &run.JobOptions{
 		Log: log.WithLocalContext("job[%s]", name),
+
+		Cwd: cwd,
 	})
 
 	for agent = range job.Accept() {
@@ -61,6 +68,13 @@ func runCommand(route, name string, args []string, log sio.Logger) {
 				os.Stderr.Write(b)
 			}
 		}(agent)
+
+		go func (agent run.Agent) {
+			<-agent.Wait()
+			log.Info("agent %s exits with %d",
+				log.Emph(0, agent.Name()),
+				log.Emph(1, agent.Exit()))
+		}(agent)
 	}
 
 	var b []byte
@@ -80,9 +94,7 @@ func runCommand(route, name string, args []string, log sio.Logger) {
 
 	close(job.Stdin())
 
-	log.Info("done")
-
-	job.Wait()
+	<-job.Wait()
 }
 
 
@@ -90,9 +102,18 @@ func runCommand(route, name string, args []string, log sio.Logger) {
 
 
 func runMain(cli ui.Cli) {
+	var cwdOption ui.OptionString = ui.OptString{}.New()
 	var route, name string
 	var args []string
+	var err error
 	var ok bool
+
+	cli.AddOption('C', "cwd", cwdOption)
+
+	err = cli.Parse()
+	if err != nil {
+		fatale(err)
+	}
 
 	route, ok = cli.SkipWord()
 	if ok == false {
@@ -106,5 +127,6 @@ func runMain(cli ui.Cli) {
 
 	args = cli.Arguments()[cli.Parsed():]
 
-	runCommand(route, name, args, sio.NewStderrLogger(sio.LOG_TRACE))
+	runCommand(route, name, args, cwdOption.Value(),
+		sio.NewStderrLogger(sio.LOG_TRACE))
 }

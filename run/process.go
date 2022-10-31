@@ -81,6 +81,8 @@ func NewProcessWith(n string, a []string, o *ProcessOptions) (Process, error) {
 type ProcessOptions struct {
 	Log sio.Logger
 
+	Cwd string
+
 	Stdout func ([]byte) error
 
 	Stderr func ([]byte) error
@@ -135,6 +137,7 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 
 	this.log = opts.Log
 	this.logStdin = this.log.WithLocalContext("stdin")
+	this.inner.Dir = opts.Cwd
 	this.stdout = newProcessReader(stdout, opts.Stdout, opts.CloseStdout,
 		this.log.WithLocalContext("stdout"))
 	this.stderr = newProcessReader(stderr, opts.Stderr, opts.CloseStderr,
