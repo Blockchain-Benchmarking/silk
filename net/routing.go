@@ -164,7 +164,7 @@ func (this *routingService) Handle(msg *RoutingMessage, conn Connection) {
 		route = newRequestRoute(append(nexts[i], msg.names[1:]...),
 			routes, protos)
 
-		if len(msg.names) > 1 {
+		if len(append(nexts[i], msg.names[1:]...)) > 0 {
 			route = newDispatchRoute(route, log)
 		}
 
