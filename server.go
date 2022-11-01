@@ -19,17 +19,13 @@ const DEFAULT_TCP_PORT = 3200
 
 
 func serverUsage() {
-	fmt.Printf(`Usage: %s server [-d | --daemon[=<path>]] [-n<str> | --name=<str>] [--tcp[=<int>]]
+	fmt.Printf(`Usage: %s server [-n<str> | --name=<str>] [--tcp[=<int>]]
 
 Launch a server.
 By default, the server listen for connections on the tcp port %d and run in
 foreground.
 
 Options:
-
-  -d, --daemon[=<path>]       Launch the server in the background. Return only
-                              once the server is listening. If <path> is
-                              specified then write the server pid in this file.
 
   -n<str>, --name=<str>       Launch the server with the given <str> name.
 
@@ -76,7 +72,7 @@ func serve(a net.Accepter, routing net.RoutingService, running run.Service) {
 	}
 }
 
-func serveForeground(port int, name string, log sio.Logger) {
+func serverStart(port int, name string, log sio.Logger) {
 	var routingService net.RoutingService
 	var runService run.Service
 	var resolver net.Resolver
@@ -104,10 +100,10 @@ func serveForeground(port int, name string, log sio.Logger) {
 		fatale(err)
 	}
 
+	log.Info("start")
+
 	go serve(tcp, routingService, runService)
 	go serve(routingService, routingService, runService)
-
-	log.Info("start")
 
 	var c chan struct{} = nil
 	<-c  // fucking yolo
@@ -117,11 +113,7 @@ func serveForeground(port int, name string, log sio.Logger) {
 // ----------------------------------------------------------------------------
 
 
-func serverMain(cli ui.Cli) {
-	var daemonOption ui.OptionString = ui.OptString{
-		ValidityPredicate: ui.OptPathParentExists,
-		Variadic: true,
-	}.New()
+func serverMain(cli ui.Cli, verbose *verbosity) {
 	var nameOption ui.OptionString = ui.OptString{
 		ValidityPredicate: func (val string) error {
 			if val == "" {
@@ -146,7 +138,6 @@ func serverMain(cli ui.Cli) {
 	var op string
 	var ok bool
 
-	cli.AddOption('d', "daemon", daemonOption)
 	cli.AddLongOption("tcp", tcpOption)
 	cli.AddOption('n', "name", nameOption)
 
@@ -159,7 +150,6 @@ func serverMain(cli ui.Cli) {
 	if ok {
 		fatal("unexpected operand: %s", op)
 	}
-
-	serveForeground(tcpOption.Value(), nameOption.Value(),
-		sio.NewStderrLogger(sio.LOG_TRACE))
+	
+	serverStart(tcpOption.Value(), nameOption.Value(), verbose.log())
 }

@@ -73,7 +73,7 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 // ----------------------------------------------------------------------------
 
 
-func runMain(cli ui.Cli) {
+func runMain(cli ui.Cli, verbose *verbosity) {
 	var cwdOption ui.OptionString = ui.OptString{}.New()
 	var route, name string
 	var args []string
@@ -99,6 +99,5 @@ func runMain(cli ui.Cli) {
 
 	args = cli.Arguments()[cli.Parsed():]
 
-	runCommand(route, name, args, cwdOption.Value(),
-		sio.NewStderrLogger(sio.LOG_TRACE))
+	runCommand(route, name, args, cwdOption.Value(), verbose.log())
 }

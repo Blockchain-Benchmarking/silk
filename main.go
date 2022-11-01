@@ -4,8 +4,14 @@ package main
 import (
 	"fmt"
 	"os"
+	sio "silk/io"
 	"silk/ui"
+	"strconv"
+	"strings"
 )
+
+
+// ----------------------------------------------------------------------------
 
 
 const ProgramName = "silk"
@@ -14,7 +20,7 @@ const AuthorName = "Gauthier Voron"
 const AuthorEmail = "gauthier.voron@epfl.ch"
 
 
-//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// ----------------------------------------------------------------------------
 
 
 func fatal(fstr string, args ...interface{}) {
@@ -32,7 +38,7 @@ func fatale(err error) {
 }
 
 
-//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// ----------------------------------------------------------------------------
 
 
 func usage() error {
@@ -83,29 +89,109 @@ func version() error {
 }
 
 
-//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// ----------------------------------------------------------------------------
 
 
-func increaseVerbosity() {
-	fmt.Printf("verbose++\n")
+type verbosity struct {
+	level int
+	path string
 }
 
-func setVerbosity(val string) error {
-	fmt.Printf("verbose = %s\n", val)
+func newVerbosity(level int) *verbosity {
+	var this verbosity
+
+	switch level {
+	case sio.LOG_ERROR: this.level = 1
+	case sio.LOG_WARN:  this.level = 2
+	case sio.LOG_INFO:  this.level = 3
+	case sio.LOG_DEBUG: this.level = 4
+	case sio.LOG_TRACE: this.level = 5
+	default: this.level = 0
+	}
+
+	return &this
+}
+
+func (this *verbosity) setPath(value string) {
+	this.path = value
+}
+
+func (this *verbosity) increaseLevel() {
+	this.level += 1
+}
+
+func (this *verbosity) setLevel(value string) error {
+	var err error
+	var i uint64
+
+	i, err = strconv.ParseUint(value, 10, 8)
+	if err == nil {
+		this.level = int(i)
+		return nil
+	}
+
+	switch strings.ToLower(value) {
+	case "n", "none", "quiet", "silent": this.level = 0
+	case "e", "err", "error": this.level = 1
+	case "w", "warn", "warning": this.level = 2
+	case "i", "info": this.level = 3
+	case "d", "debug": this.level = 4
+	case "t", "trace": this.level = 5
+	default: return fmt.Errorf("unknown verbosity level: '%s'", value)
+	}
+
 	return nil
 }
 
+func (this *verbosity) log() sio.Logger {
+	var file *os.File
+	var level int
+	var err error
+
+	switch this.level {
+	case 0: level = 0
+	case 1: level = sio.LOG_ERROR
+	case 2: level = sio.LOG_WARN
+	case 3: level = sio.LOG_INFO
+	case 4: level = sio.LOG_DEBUG
+	default: level = sio.LOG_TRACE
+	}
+
+	if this.path == "" {
+		return sio.NewStderrLogger(level)
+	} else {
+		file, err = os.Create(this.path)
+		if err != nil {
+			fatale(err)
+		}
+
+		return sio.NewFileLogger(file, level)
+	}
+}
+
+
+// ----------------------------------------------------------------------------
+
 
 func main() {
+	var verbose *verbosity = newVerbosity(sio.LOG_WARN)
 	var helpOption ui.Option = ui.OptCall{
 		WithoutArg: func () error { usage() ; return nil },
 	}.New()
-	var logOption ui.OptionString = ui.OptString{
-		ValidityPredicate: ui.OptPathParentExists,
+	var logOption ui.Option = ui.OptCall{
+		WithArg: func (v string) error {
+			verbose.setPath(v)
+			return nil
+		}, 
 	}.New()
 	var verboseOption ui.Option = ui.OptCall{
-		WithoutArg: func () error { increaseVerbosity() ; return nil },
-		WithArg: func (v string) error { return setVerbosity(v) }, 
+		WithoutArg: func () error {
+			verbose.increaseLevel()
+			return nil
+		},
+		WithArg: func (v string) error {
+			return verbose.setLevel(v)
+		}, 
 	}.New()
 	var versionOption ui.Option = ui.OptCall{
 		WithoutArg: func () error { version() ; return nil },
@@ -134,10 +220,10 @@ func main() {
 
 	switch command {
 	case "run":
-		runMain(cli)
+		runMain(cli, verbose)
 	case "server":
-		serverMain(cli)
-	case "cp":
+		serverMain(cli, verbose)
+	case "send":
 		fatal("unimplemented")
 	default:
 		fatal("unknown command operand '%s'", command)
