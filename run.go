@@ -53,21 +53,8 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 	for agent = range job.Accept() {
 		close(agent.Stdin())
 
-		go func (agent run.Agent) {
-			var b []byte
-
-			for b = range agent.Stdout() {
-				os.Stdout.Write(b)
-			}
-		}(agent)
-
-		go func (agent run.Agent) {
-			var b []byte
-
-			for b = range agent.Stdout() {
-				os.Stderr.Write(b)
-			}
-		}(agent)
+		go sio.WriteFromChannel(os.Stdout, agent.Stdout())
+		go sio.WriteFromChannel(os.Stderr, agent.Stderr())
 
 		go func (agent run.Agent) {
 			<-agent.Wait()
@@ -77,22 +64,7 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 		}(agent)
 	}
 
-	var b []byte
-	var e error
-	var n int
-
-	for {
-		b = make([]byte, 1 << 21)
-
-		n, e = os.Stdin.Read(b)
-		if e != nil {
-			break
-		}
-
-		job.Stdin() <- b[:n]
-	}
-
-	close(job.Stdin())
+	go sio.ReadInChannel(os.Stdin, job.Stdin())
 
 	<-job.Wait()
 }
