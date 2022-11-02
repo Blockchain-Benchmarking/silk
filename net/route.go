@@ -89,7 +89,7 @@ func newLeafRoute(connc <-chan Connection) *leafRoute {
 
 	senderc = make(chan Sender)
 	this.acceptc = make(chan Connection)
-	this.bcast = NewSendGather(senderc)
+	this.bcast = NewBroadcaster(senderc)
 
 	go this.run(senderc, connc)
 
@@ -140,7 +140,7 @@ func newCompositeRoute(routec <-chan Route) *compositeRoute {
 	var accepterc chan Accepter
 
 	senderc = make(chan Sender)
-	this.bcast = NewSendGather(senderc)
+	this.bcast = NewBroadcaster(senderc)
 
 	accepterc = make(chan Accepter)
 	this.cctor = NewAcceptGather(accepterc)

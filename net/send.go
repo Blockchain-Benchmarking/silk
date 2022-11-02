@@ -35,7 +35,7 @@ type Sender interface {
 // Closing the brodcaster causes it to close all the `Sender`s ever received or
 // to be received later on `senderc`.
 //
-func NewSendGather(senderc <-chan Sender) Sender {
+func NewBroadcaster(senderc <-chan Sender) Sender {
 	return newBroadcaster(senderc)
 }
 
