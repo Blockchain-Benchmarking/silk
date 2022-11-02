@@ -2,6 +2,8 @@ package net
 
 
 import (
+	"context"
+	"sync"
 	"testing"
 )
 
@@ -252,4 +254,92 @@ func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {
 	}
 
 	testMessagesEquality(in[:70], out, t)
+}
+
+
+// ----------------------------------------------------------------------------
+
+
+func TestSenderAggregatorEmpty(t *testing.T) {
+	var s Sender = NewSliceSenderAggregator([]Sender{})
+
+	close(s.Send())
+}
+
+func TestSenderAggregatorOne(t *testing.T) {
+	testFifoSender(t, func () *senderTestSetup {
+		var addr string = findTcpAddr(t)
+		var cancel context.CancelFunc
+		var ctx context.Context
+		var c, a Connection
+		var s Accepter
+
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
+		c = NewTcpConnection(addr)
+		a = <-s.Accept()
+
+		return &senderTestSetup{
+			sender: NewSliceSenderAggregator([]Sender{ c }),
+			recvc: a.Recv(mockProtocol),
+			teardown: func () {
+				cancel()
+				close(a.Send())
+			},
+		}
+	})
+}
+
+func TestSenderAggregatorMany(t *testing.T) {
+	testSender(t, func () *senderTestSetup {
+		var addr string = findTcpAddr(t)
+		var cancel context.CancelFunc
+		var receiving sync.WaitGroup
+		var ctx context.Context
+		var recvc chan Message
+		var as []Connection
+		var a Connection
+		var ss []Sender
+		var s Accepter
+		var i int
+
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
+		recvc = make(chan Message, 128)
+
+		for i = 0; i < 10; i++ {
+			ss = append(ss, NewTcpConnection(addr))
+
+			a = <-s.Accept()
+			as = append(as, a)
+
+			receiving.Add(1)
+
+			go func (a Connection) {
+				var msg Message
+
+				for msg = range a.Recv(mockProtocol) {
+					recvc <- msg
+				}
+
+				receiving.Done()
+			}(a)
+		}
+
+		go func () {
+			receiving.Wait()
+			close(recvc)
+		}()
+
+		return &senderTestSetup{
+			sender: NewSliceSenderAggregator(ss),
+			recvc: recvc,
+			teardown: func () {
+				cancel()
+				for _, a = range as {
+					close(a.Send())
+				}
+			},
+		}
+	})
 }
