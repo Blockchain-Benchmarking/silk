@@ -2,7 +2,7 @@ BIN := bin/
 
 export GOPATH=$(PWD)/.go/
 
-modules := io net run ui
+modules := io net run ui util/atomic util/rand
 mains := main run server
 
 T ?= $(modules)
