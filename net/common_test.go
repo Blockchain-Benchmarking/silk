@@ -16,7 +16,7 @@ import (
 // ----------------------------------------------------------------------------
 
 
-const BASE_TIMEOUT = 10 * time.Millisecond
+const BASE_TIMEOUT = 1000 * time.Millisecond
 
 func timeout(n int) <-chan struct{} {
 	var ret chan struct{} = make(chan struct{})
@@ -32,7 +32,8 @@ func timeout(n int) <-chan struct{} {
 
 var mockProtocol Protocol = NewUint8Protocol(map[uint8]Message{
 	0: &RoutingMessage{},
-	1: &mockMessage{},
+	1: &AggregationMessage{},
+	2: &mockMessage{},
 })
 
 
