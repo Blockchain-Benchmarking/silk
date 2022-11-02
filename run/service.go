@@ -4,12 +4,12 @@ package run
 import (
 	"fmt"
 	"math"
-	"math/rand"
 	"os"
 	"os/exec"
 	sio "silk/io"
 	"silk/net"
 	"silk/util/atomic"
+	"silk/util/rand"
 	"strings"
 	"sync"
 )
