@@ -45,13 +45,11 @@ func NewUint8Protocol(hmap map[uint8]Message) Protocol {
 
 
 type rawProtocol struct {
-	recv Message
-	used bool
 	rtype reflect.Type
 }
 
 func newRawProtocol(recv Message) *rawProtocol {
-	return &rawProtocol{ recv, false, nil }
+	return &rawProtocol{ reflect.ValueOf(recv).Type().Elem() }
 }
 
 func (this *rawProtocol) Encode(sink io.Sink, msg Message) error {
@@ -62,17 +60,7 @@ func (this *rawProtocol) Decode(source io.Source) (Message, error) {
 	var msg Message
 	var err error
 
-	if this.used {
-		if this.rtype == nil {
-			this.rtype = reflect.ValueOf(this.recv).Type().Elem()
-			this.recv = nil
-		}
-
-		msg = reflect.New(this.rtype).Interface().(Message)
-	} else {
-		this.used = true
-		msg = this.recv
-	}
+	msg = reflect.New(this.rtype).Interface().(Message)
 
 	err = source.ReadDecodable(msg).Error()
 	if err != nil {
