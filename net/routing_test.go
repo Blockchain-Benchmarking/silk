@@ -11,16 +11,6 @@ import (
 // ----------------------------------------------------------------------------
 
 
-func _serveConnections(a Accepter, connc chan<- Connection) {
-	var c Connection
-
-	for c = range a.Accept() {
-		connc <- c
-	}
-
-	close(connc)
-}
-
 func _routeConnections(a Accepter, rs RoutingService) {
 	var m *RoutingMessage
 	var c Connection
@@ -45,7 +35,7 @@ func _routeConnections(a Accepter, rs RoutingService) {
 }
 
 func serveEndpoint(ctx context.Context, addr string, connc chan<- Connection) {
-	_serveConnections(NewTcpServerWith(addr, &TcpServerOptions{
+	acceptConnections(NewTcpServerWith(addr, &TcpServerOptions{
 		Context: ctx,
 	}), connc)
 }
@@ -59,7 +49,7 @@ func serveRelay(ctx context.Context, addr string, res Resolver) {
 func serveTerminal(ctx context.Context, addr string, connc chan<- Connection) {
 	var rs RoutingService = NewRoutingService(nil)
 
-	go _serveConnections(rs, connc)
+	go acceptConnections(rs, connc)
 
 	_routeConnections(NewTcpServerWith(addr, &TcpServerOptions{
 		Context: ctx,

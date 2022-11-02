@@ -154,6 +154,16 @@ func findUnresolvableAddr(t *testing.T) string {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
+func acceptConnections(a Accepter, connc chan<- Connection) {
+	var c Connection
+
+	for c = range a.Accept() {
+		connc <- c
+	}
+
+	close(connc)
+}
+
 func _gatherConnections(cc <-chan Connection,t <-chan struct{}) []Connection {
 	var cs []Connection = make([]Connection, 0)
 	var c Connection
