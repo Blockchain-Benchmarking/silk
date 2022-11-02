@@ -41,7 +41,7 @@ bench:
 
 $(BIN)silk: $(addsuffix .go, $(mains)) \
           $(foreach d, $(modules), $(wildcard $(d)/*.go)) | $(BIN)
-	go build -v -race -o $@ $(addsuffix .go, $(mains))
+	go build -v -o $@ $(addsuffix .go, $(mains))
 
 
 $(BIN):
