@@ -44,11 +44,12 @@ Options:
 
 var protocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
 	0: &net.RoutingMessage{},
-	1: &run.Message{},
+	1: &net.AggregationMessage{},
+	2: &run.Message{},
 })
 
 
-func handle(c net.Connection, routing net.RoutingService, running run.Service){
+func handle(c net.Connection, aggregation net.AggregationService, routing net.RoutingService, running run.Service){
 	var msg net.Message
 	var more bool
 
@@ -61,20 +62,23 @@ func handle(c net.Connection, routing net.RoutingService, running run.Service){
 	switch m := msg.(type) {
 	case *net.RoutingMessage:
 		routing.Handle(m, c)
+	case *net.AggregationMessage:
+		aggregation.Handle(m, c)
 	case *run.Message:
 		running.Handle(m, c)
 	}
 }
 
-func serve(a net.Accepter, routing net.RoutingService, running run.Service) {
+func serve(a net.Accepter, aggregation net.AggregationService, routing net.RoutingService, running run.Service) {
 	var conn net.Connection
 
 	for conn = range a.Accept() {
-		go handle(conn, routing, running)
+		go handle(conn, aggregation, routing, running)
 	}
 }
 
 func serverStart(port int, name string, log sio.Logger) {
+	var aggregationService net.AggregationService
 	var routingService net.RoutingService
 	var runService run.Service
 	var resolver net.Resolver
@@ -83,8 +87,13 @@ func serverStart(port int, name string, log sio.Logger) {
 
 	tcp = net.NewTcpServer(fmt.Sprintf(":%d", port))
 
-	resolver = net.NewGroupResolver(net.NewTcpResolverWith(protocol,
-		&net.TcpResolverOptions{
+	aggregationService = net.NewAggregationServiceWith(
+		&net.AggregationServiceOptions{
+			Log: log.WithLocalContext("aggregate"),
+		})
+
+	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
+		protocol, &net.TcpResolverOptions{
 			Log: log.WithLocalContext("resolve"),
 		}))
 
@@ -104,8 +113,11 @@ func serverStart(port int, name string, log sio.Logger) {
 
 	log.Info("start")
 
-	go serve(tcp, routingService, runService)
-	go serve(routingService, routingService, runService)
+	go serve(tcp, aggregationService, routingService, runService)
+	go serve(aggregationService, aggregationService, routingService,
+		runService)
+	go serve(routingService, aggregationService, routingService,
+		runService)
 
 	var c chan struct{} = nil
 	<-c  // fucking yolo

@@ -40,8 +40,8 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 	var agent run.Agent
 	var job run.Job
 
-	resolver = net.NewGroupResolver(net.NewTcpResolverWith(protocol,
-		&net.TcpResolverOptions{
+	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
+		protocol, &net.TcpResolverOptions{
 			Log: log.WithLocalContext("resolve"),
 		}))
 
