@@ -10,6 +10,59 @@ import (
 // ----------------------------------------------------------------------------
 
 
+type connectionTestSetup struct {
+	left Connection
+	right Connection
+	teardown func ()
+}
+
+
+// ----------------------------------------------------------------------------
+
+
+func testConnection(t *testing.T, setupf func () *connectionTestSetup) {
+	t.Logf("testConnectionSender")
+	testConnectionSender(t, setupf)
+
+	t.Logf("testConnectionReceiver")
+	testConnectionReceiver(t, setupf)
+}
+
+func testConnectionSender(t *testing.T, setupf func () *connectionTestSetup) {
+	testFifoSender(t, func () *senderTestSetup {
+		var setup *connectionTestSetup = setupf()
+
+		return &senderTestSetup{
+			sender: setup.left,
+			recvc: setup.right.Recv(mockProtocol),
+			teardown: func () {
+				close(setup.right.Send())
+				setup.teardown()
+			},
+		}
+	})
+}
+
+func testConnectionReceiver(t *testing.T, setupf func () *connectionTestSetup){
+	testFifoReceiver(t, func () *receiverTestSetup {
+		var setup *connectionTestSetup = setupf()
+
+		return &receiverTestSetup{
+			receiver: newTrivialReceiver(setup.left.Recv(
+				mockProtocol)),
+			sendc: setup.right.Send(),
+			teardown: func () {
+				close(setup.left.Send())
+				setup.teardown()
+			},
+		}
+	})
+}
+
+
+// ----------------------------------------------------------------------------
+
+
 func TestTcpConnectionEmptyAddr(t *testing.T) {
 	var c Connection
 	var more bool
@@ -60,42 +113,9 @@ func TestTcpConnectionUnresolvable(t *testing.T) {
 	close(c.Send())
 }
 
-func TestTcpConnectionSender(t *testing.T) {
-	testSender(t, func () *senderTestSetup {
+func TestTcpConnection(t *testing.T) {
+	testConnection(t, func () *connectionTestSetup {
 		var addr string = findTcpAddr(t)
-		var cancel context.CancelFunc
-		var ctx context.Context
-		var recvc <-chan Message
-		var c, a Connection
-		var s Accepter
-
-		ctx, cancel = context.WithCancel(context.Background())
-		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
-		c = NewTcpConnection(addr)
-		a = <-s.Accept()
-
-		if a == nil {
-			ac := make(chan Message) ; close(ac)
-			recvc = ac
-		} else {
-			recvc = a.Recv(mockProtocol)
-		}
-
-		return &senderTestSetup{
-			sender: c,
-			recvc: recvc,
-			teardown: func () {
-				cancel()
-				close(a.Send())
-			},
-		}
-	})
-}
-
-func TestTcpConnectionReceiver(t *testing.T) {
-	testReceiver(t, func () *receiverTestSetup {
-		var addr string = findTcpAddr(t)
-		var sendc chan<- MessageProtocol
 		var cancel context.CancelFunc
 		var ctx context.Context
 		var c, a Connection
@@ -106,21 +126,10 @@ func TestTcpConnectionReceiver(t *testing.T) {
 		c = NewTcpConnection(addr)
 		a = <-s.Accept()
 
-		if a == nil {
-			ac := make(chan MessageProtocol)
-			go func () { for _ = range ac {} }()
-			sendc = ac
-		} else {
-			sendc = a.Send()
-		}
-
-		return &receiverTestSetup{
-			receiver: c,
-			sendc: sendc,
-			teardown: func () {
-				cancel()
-				close(c.Send())
-			},
+		return &connectionTestSetup{
+			left: c,
+			right: a,
+			teardown: cancel,
 		}
 	})
 }
