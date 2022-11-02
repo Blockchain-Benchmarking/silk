@@ -292,7 +292,7 @@ func (this *tcpConnection) Send() chan<- MessageProtocol {
 }
 
 func (this *tcpConnection) Recv(proto Protocol) <-chan Message {
-	var c chan Message = make(chan Message)
+	var c chan Message = make(chan Message, 32)
 
 	go this.decode(c, proto, -1)
 
