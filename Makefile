@@ -44,6 +44,10 @@ $(BIN)silk: $(addsuffix .go, $(mains)) \
 	go build -v -race -o $@ $(addsuffix .go, $(mains))
 
 
+$(BIN):
+	mkdir $(BIN)
+
+
 clean:
 	-rm -rf $(BIN)
 
