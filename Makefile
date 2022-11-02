@@ -1,3 +1,5 @@
+BIN := bin/
+
 export GOPATH=$(PWD)/.go/
 
 modules := io net run ui
@@ -19,10 +21,11 @@ ifeq ($(filter $(modules), $(T)),)
 endif
 
 
+-include .config/Makefile
+
+
 all: bin/silk
 
-check: bin/silk
-	./$< run "localhost:3200,(localhost:3201|localhost:3202)" ls
 
 test:
 	go test $(test_verbosity_options) -count=1 $(test_parameters)
@@ -31,13 +34,13 @@ bench:
 	go test $(test_verbosity_options) -bench=. $(addprefix ./, $(T))
 
 
-bin/silk: $(addsuffix .go, $(mains)) \
+$(BIN)silk: $(addsuffix .go, $(mains)) \
           $(foreach d, $(modules), $(wildcard $(d)/*.go))
 	go build -v -race -o $@ $(addsuffix .go, $(mains))
 
 
 clean:
-	-rm -rf bin
+	-rm -rf $(BIN)
 
 cleanall: clean
 	-rm -rf $(PWD)/.go/
