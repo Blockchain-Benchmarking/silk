@@ -148,7 +148,7 @@ func testRouteAccepter(t *testing.T, setupf func() *routeTestSetup) {
 }
 
 func testRouteSender(t *testing.T, setupf func () *routeTestSetup) {
-	testSender(t, func () *senderTestSetup {
+	testFifoSender(t, func () *senderTestSetup {
 		var setup *routeTestSetup = setupf()
 		var mcs []<-chan *mockMessage
 		var conn Connection
@@ -176,40 +176,8 @@ func testRouteSender(t *testing.T, setupf func () *routeTestSetup) {
 	})
 }
 
-func testRouteConnectionSender(t *testing.T, setupf func () *routeTestSetup) {
-	testSender(t, func () *senderTestSetup {
-		var setup *routeTestSetup = setupf()
-		var mcs []<-chan *mockMessage
-		var sconn, conn Connection
-		var i int
-
-		sconn = <-setup.route.Accept()
-		for conn = range setup.route.Accept() {
-			close(conn.Send())
-		}
-
-		close(setup.route.Send())
-
-		mcs = make([]<-chan *mockMessage, len(setup.conns))
-		for i = range setup.conns {
-			mcs[i] = recvMock(setup.conns[i].Recv(mockProtocol))
-		}
-
-		return &senderTestSetup{
-			sender: sconn,
-			recvc: recvMessage(recvAllMocks(mcs)),
-			teardown: func () {
-				setup.teardown()
-				for i = range setup.conns {
-					close(setup.conns[i].Send())
-				}
-			},
-		}
-	})
-}
-
 func testRouteReceiver(t *testing.T, setupf func () *routeTestSetup) {
-	testReceiver(t, func () *receiverTestSetup {
+	testFifoReceiver(t, func () *receiverTestSetup {
 		var setup *routeTestSetup = setupf()
 		var mcs []<-chan *mockMessage
 		var conn Connection
@@ -240,8 +208,40 @@ func testRouteReceiver(t *testing.T, setupf func () *routeTestSetup) {
 	})
 }
 
+func testRouteConnectionSender(t *testing.T, setupf func () *routeTestSetup) {
+	testFifoSender(t, func () *senderTestSetup {
+		var setup *routeTestSetup = setupf()
+		var mcs []<-chan *mockMessage
+		var sconn, conn Connection
+		var i int
+
+		sconn = <-setup.route.Accept()
+		for conn = range setup.route.Accept() {
+			close(conn.Send())
+		}
+
+		close(setup.route.Send())
+
+		mcs = make([]<-chan *mockMessage, len(setup.conns))
+		for i = range setup.conns {
+			mcs[i] = recvMock(setup.conns[i].Recv(mockProtocol))
+		}
+
+		return &senderTestSetup{
+			sender: sconn,
+			recvc: recvMessage(recvAllMocks(mcs)),
+			teardown: func () {
+				setup.teardown()
+				for i = range setup.conns {
+					close(setup.conns[i].Send())
+				}
+			},
+		}
+	})
+}
+
 func testRouteConnectionReceiver(t *testing.T, setupf func () *routeTestSetup){
-	testReceiver(t, func () *receiverTestSetup {
+	testFifoReceiver(t, func () *receiverTestSetup {
 		var setup *routeTestSetup = setupf()
 		var mcs []<-chan *mockMessage
 		var sconn, conn Connection
