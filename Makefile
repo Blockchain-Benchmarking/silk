@@ -24,7 +24,12 @@ endif
 -include .config/Makefile
 
 
-all: bin/silk
+all: $(BIN)silk
+
+
+install: $(BIN)silk
+	mkdir -p $(prefix)/bin
+	cp $< $(prefix)/bin/silk
 
 
 test:
