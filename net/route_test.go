@@ -19,47 +19,6 @@ type routeTestSetup struct {
 }
 
 
-type trivialReceiver struct {
-	c <-chan Message
-}
-
-func newTrivialReceiver(c <-chan Message) *trivialReceiver {
-	return &trivialReceiver{ c }
-}
-
-func (this *trivialReceiver) decode(d chan<- Message, n int) {
-	var m Message
-	var more bool
-
-	for n != 0 {
-		m, more = <-this.c
-		if more == false {
-			break
-		}
-
-		d <- m
-
-		if n > 0 {
-			n -= 1
-		}
-	}
-
-	close(d)
-}
-
-func (this *trivialReceiver) Recv(proto Protocol) <-chan Message {
-	var d chan Message = make(chan Message)
-	go this.decode(d, -1)
-	return d
-}
-
-func (this *trivialReceiver) RecvN(proto Protocol, n int) <-chan Message {
-	var d chan Message = make(chan Message)
-	go this.decode(d, n)
-	return d
-}
-
-
 func recvEqMocks(mcs []<-chan *mockMessage) <-chan *mockMessage {
 	var mc chan *mockMessage = make(chan *mockMessage)
 
