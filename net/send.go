@@ -40,6 +40,40 @@ func NewBroadcaster(senderc <-chan Sender) Sender {
 }
 
 
+// Return a new aggregator over the senders sent on the given `senderc`
+// channel.
+//
+// Sending on the aggregator calls `Send` on one of the sender eventually
+// received from `senderc`.
+// Especially, a call to `Send` may call `Send` on the elements which are sent
+// concurrently to the `senderc` channel.
+//
+// A call to `Send` may block until the given `senderc` is closed.
+//
+// If `senderc` is closed before any `Sender` is sent then a call to this
+// aggregator `Send` blocks forever.
+//
+// Closing the aggregator causes it to close all the `Sender`s ever received or
+// to be received later on `senderc`.
+//
+func NewSenderAggregator(senderc <-chan Sender) Sender {
+	return newSenderQueueAggregator(senderc)
+}
+
+func NewSliceSenderAggregator(senders []Sender) Sender {
+	var senderc chan Sender = make(chan Sender, len(senders))
+	var sender Sender
+
+	for _, sender = range senders {
+		senderc <- sender
+	}
+
+	close(senderc)
+
+	return NewSenderAggregator(senderc)
+}
+
+
 // A `Sender` with the ability to `Dup`licate i.e. clone itself so both copies
 // send to the same target.
 //
@@ -114,6 +148,46 @@ func (this *broadcaster) run(senderc <-chan Sender) {
 }
 
 func (this *broadcaster) Send() chan<- MessageProtocol {
+	return this.sendc
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type senderQueueAggregator struct {
+	sendc chan MessageProtocol
+}
+
+func newSenderQueueAggregator(senderc <-chan Sender) *senderQueueAggregator {
+	var this senderQueueAggregator
+
+	this.sendc = make(chan MessageProtocol)
+
+	go this.run(senderc)
+
+	return &this
+}
+
+func (this *senderQueueAggregator) run(senderc <-chan Sender) {
+	var sender Sender
+
+	for sender = range senderc {
+		go this.transfer(sender)
+	}
+}
+
+func (this *senderQueueAggregator) transfer(sender Sender) {
+	var mp MessageProtocol
+
+	for mp = range this.sendc {
+		sender.Send() <- mp
+	}
+
+	close(sender.Send())
+}
+
+func (this *senderQueueAggregator) Send() chan<- MessageProtocol {
 	return this.sendc
 }
 
