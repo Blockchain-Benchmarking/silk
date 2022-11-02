@@ -78,7 +78,7 @@ func testReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 		t.Errorf("timeout")
 	}
 
-	testMessagesEquality(in, out, t)
+	testMessageSetEquality(in, out, t)
 }
 
 func testReceiverSync(t *testing.T, setup *receiverTestSetup) {
@@ -140,7 +140,7 @@ func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 		t.Errorf("timeout")
 	}
 
-	testMessagesEquality(in[:70], out, t)
+	testMessageSetInclusive(in[:70], out, t)
 
 	setup.teardown()
 }
@@ -154,6 +154,77 @@ func testReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	defer setup.teardown()
 
 	in[70].decodingError = true
+
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+
+	for i = range in {
+		setup.sendc <- MessageProtocol{in[i], mockProtocol}
+	}
+
+	close(setup.sendc)
+
+	out = <-outc
+
+	if out == nil {
+		t.Errorf("timeout")
+	}
+
+	testMessageSetInclusive(in[:70], out, t)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func testFifoReceiver(t *testing.T, setupf func () *receiverTestSetup) {
+	t.Logf("testReceiverCloseImmediately")
+	testReceiverCloseImmediately(t, setupf())
+
+	t.Logf("testFifoReceiverAsync")
+	testFifoReceiverAsync(t, setupf())
+
+	t.Logf("testReceiverSync")
+	testReceiverSync(t, setupf())
+
+	t.Logf("testFifoReceiverEncodingError")
+	testFifoReceiverEncodingError(t, setupf())
+
+	t.Logf("testFifoReceiverDecodingError")
+	testFifoReceiverDecodingError(t, setupf())
+}
+
+func testFifoReceiverAsync(t *testing.T, setup *receiverTestSetup) {
+	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var outc <-chan []Message
+	var out []Message
+	var i int
+
+	defer setup.teardown()
+
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+
+	for i = range in {
+		setup.sendc <- MessageProtocol{in[i], mockProtocol}
+	}
+
+	close(setup.sendc)
+
+	out = <-outc
+
+	if out == nil {
+		t.Errorf("timeout")
+	}
+
+	testMessagesEquality(in, out, t)
+}
+
+func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
+	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var outc <-chan []Message
+	var out []Message
+	var i int
+
+	in[70].encodingError = true
 
 	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
 
