@@ -34,6 +34,8 @@ Options:
                               port.
 
 `, os.Args[0], DEFAULT_TCP_PORT)
+
+	os.Exit(0)
 }
 
 
@@ -114,6 +116,9 @@ func serverStart(port int, name string, log sio.Logger) {
 
 
 func serverMain(cli ui.Cli, verbose *verbosity) {
+	var helpOption ui.Option = ui.OptCall{
+		WithoutArg: func () error { serverUsage() ; return nil },
+	}.New()
 	var nameOption ui.OptionString = ui.OptString{
 		ValidityPredicate: func (val string) error {
 			if val == "" {
@@ -138,8 +143,10 @@ func serverMain(cli ui.Cli, verbose *verbosity) {
 	var op string
 	var ok bool
 
-	cli.AddLongOption("tcp", tcpOption)
+	cli.DelOption('h', "help")
+	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('n', "name", nameOption)
+	cli.AddLongOption("tcp", tcpOption)
 
 	err = cli.Parse()
 	if err != nil {

@@ -15,6 +15,10 @@ type Cli interface {
 	AddShortOption(rune, Option)
 	AddLongOption(string, Option)
 
+	DelOption(rune, string)
+	DelShortOption(rune)
+	DelLongOption(string)
+
 	Append([]string)
 	Arguments() []string
 	Parsed() int
@@ -122,6 +126,27 @@ func (this *cli) AddLongOption(s string, o Option) {
 	}
 
 	this.longs[s] = o
+}
+
+func (this *cli) DelOption(r rune, s string) {
+	this.DelShortOption(r)
+	this.DelLongOption(s)
+}
+
+func (this *cli) DelShortOption(r rune) {
+	if this.shorts[r] == nil {
+		panic("no option to delete")
+	}
+
+	delete(this.shorts, r)
+}
+
+func (this *cli) DelLongOption(s string) {
+	if this.longs[s] == nil {
+		panic("no option to delete")
+	}
+
+	delete(this.longs, s)
 }
 
 func (this *cli) Append(args []string) {

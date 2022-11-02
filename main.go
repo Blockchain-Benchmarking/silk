@@ -41,7 +41,7 @@ func fatale(err error) {
 // ----------------------------------------------------------------------------
 
 
-func usage() error {
+func usage() {
 	fmt.Printf(`
 Usage: %s [-h | --help] [-l<path> | --log=<path>] [-v | --verbose[=<str>]]
          [--version] <command> [<args>]
@@ -73,19 +73,15 @@ Common options:
 `, os.Args[0], os.Args[0])
 
 	os.Exit(0)
-
-	return nil
 }
 
-func version() error {
+func version() {
 	fmt.Printf(`%s %s
 %s
 %s
 `, ProgramName, ProgramVersion, AuthorName, AuthorEmail)
 
 	os.Exit(0)
-
-	return nil
 }
 
 

@@ -26,6 +26,8 @@ Options:
                               before to run the command.
 
 `, os.Args[0])
+
+	os.Exit(0)
 }
 
 
@@ -75,11 +77,16 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 
 func runMain(cli ui.Cli, verbose *verbosity) {
 	var cwdOption ui.OptionString = ui.OptString{}.New()
+	var helpOption ui.Option = ui.OptCall{
+		WithoutArg: func () error { runUsage() ; return nil },
+	}.New()
 	var route, name string
 	var args []string
 	var err error
 	var ok bool
 
+	cli.DelOption('h', "help")
+	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('C', "cwd", cwdOption)
 
 	err = cli.Parse()
