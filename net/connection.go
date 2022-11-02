@@ -186,7 +186,7 @@ func newTcpConnection(conn net.Conn) *tcpConnection {
 	this.cond = sync.NewCond(&this.lock)
 	this.ready = true
 	this.conn = conn
-	this.sendc = make(chan MessageProtocol)
+	this.sendc = make(chan MessageProtocol, 32)
 
 	go this.encode()
 
@@ -198,7 +198,7 @@ func dialTcpConnection(addr string) *tcpConnection {
 
 	this.cond = sync.NewCond(&this.lock)
 	this.ready = false
-	this.sendc = make(chan MessageProtocol)
+	this.sendc = make(chan MessageProtocol, 32)
 
 	go this.dial(addr)
 
