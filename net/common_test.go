@@ -495,3 +495,68 @@ func testMessagesEquality(in []*mockMessage, out []Message, t *testing.T) {
 		}
 	}
 }
+
+func testMessageSetEquality(in []*mockMessage, out []Message, t *testing.T) {
+	if len(out) > len(in) {
+		t.Errorf("got %d unexpected messages", len(out) - len(in))
+	} else {
+		testMessageSetInclusive(in, out, t)
+	}
+}
+
+func testMessageSetInclusive(in []*mockMessage, out []Message, t *testing.T) {
+	const MAX_ERROR_BEFORE_STOP = 10
+	var im, om *mockMessage
+	var i, j, n, e int
+	var discard []bool
+	var ok, found bool
+
+	e = 0
+
+	if len(out) < len(in) {
+		t.Errorf("lost %d messages", len(in) - len(out))
+		n = len(out)
+		e += 1
+	} else {
+		n = len(in)
+	}
+
+	discard = make([]bool, len(out))
+
+	for i = 0; i < n; i++ {
+		if e >= MAX_ERROR_BEFORE_STOP {
+			t.Logf("stop reporting after %d errors", e)
+			break
+		}
+
+		im = in[i]
+		found = false
+
+		for j = 0; j < len(out); j++ {
+			if discard[j] {
+				continue
+			}
+
+			om, ok = out[j].(*mockMessage)
+			if ok == false {
+				t.Errorf("message[%d]: unexpected type: %T:%v",
+					j, out[j], out[j])
+				discard[j] = true
+				e += 1
+				continue
+			}
+
+			ok, _ = cmpMessages(im, om)
+			if ok == true {
+				found = true
+				discard[j] = true
+				break
+			}
+		}
+
+		if found == false {
+			t.Errorf("message[%d]: no matching output", i)
+			e += 1
+		}
+	}
+}
