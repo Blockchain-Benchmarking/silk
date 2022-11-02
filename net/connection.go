@@ -279,7 +279,9 @@ func (this *tcpConnection) decode(dest chan<- Message, p Protocol, n int) {
 
 		dest <- msg
 
-		n -= 1
+		if n > 0 {
+			n -= 1
+		}
 	}
 
 	close(dest)
