@@ -75,7 +75,7 @@ func testSenderAsync(t *testing.T, setup *senderTestSetup) {
 		t.Errorf("timeout")
 	}
 
-	testMessagesEquality(in, out, t)
+	testMessageSetEquality(in, out, t)
 }
 
 func testSenderSync(t *testing.T, setup *senderTestSetup) {
@@ -130,12 +130,106 @@ func testSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 		t.Errorf("timeout")
 	}
 
-	testMessagesEquality(in[:70], out, t)
+	testMessageSetInclusive(in[:70], out, t)
 
 	setup.teardown()
 }
 
 func testSenderDecodingError(t *testing.T, setup *senderTestSetup) {
+	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
+	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var out []Message
+	var i int
+
+	defer setup.teardown()
+
+	in[70].decodingError = true
+
+	for i = range in {
+		setup.sender.Send() <- MessageProtocol{in[i], mockProtocol}
+	}
+
+	close(setup.sender.Send())
+
+	out = <-outc
+
+	if out == nil {
+		t.Errorf("timeout")
+	}
+
+	testMessageSetInclusive(in[:70], out, t)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func testFifoSender(t *testing.T, setupf func () *senderTestSetup) {
+	t.Logf("testSenderCloseImmediately")
+	testSenderCloseImmediately(t, setupf())
+
+	t.Logf("testFifoSenderAsync")
+	testFifoSenderAsync(t, setupf())
+
+	t.Logf("testSenderSync")
+	testSenderSync(t, setupf())
+
+	t.Logf("testFifoSenderEncodingError")
+	testFifoSenderEncodingError(t, setupf())
+
+	t.Logf("testFifoSenderDecodingError")
+	testFifoSenderDecodingError(t, setupf())
+}
+
+func testFifoSenderAsync(t *testing.T, setup *senderTestSetup) {
+	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
+	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var out []Message
+	var i int
+
+	defer setup.teardown()
+
+	for i = range in {
+		setup.sender.Send() <- MessageProtocol{in[i], mockProtocol}
+	}
+
+	close(setup.sender.Send())
+
+	out = <-outc
+
+	if out == nil {
+		t.Errorf("timeout")
+	}
+
+	testMessagesEquality(in, out, t)
+}
+
+func testFifoSenderEncodingError(t *testing.T, setup *senderTestSetup) {
+	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
+	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var out []Message
+	var i int
+
+	in[70].encodingError = true
+
+	for i = range in {
+		setup.sender.Send() <- MessageProtocol{in[i], mockProtocol}
+	}
+
+	close(setup.sender.Send())
+
+	out = <-outc
+
+	if out == nil {
+		t.Errorf("timeout")
+	}
+
+	testMessagesEquality(in[:70], out, t)
+
+	setup.teardown()
+}
+
+func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {
 	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
 	var out []Message
