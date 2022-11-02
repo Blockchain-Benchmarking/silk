@@ -45,6 +45,23 @@ func NewTcpResolverWith(proto Protocol, opts *TcpResolverOptions) Resolver {
 }
 
 
+func NewAggregatedTcpResolver(proto Protocol) Resolver {
+	return NewAggregatedTcpResolverWith(proto, nil)
+}
+
+func NewAggregatedTcpResolverWith(p Protocol, o *TcpResolverOptions) Resolver{
+	if o == nil {
+		o = &TcpResolverOptions{}
+	}
+
+	if o.Log == nil {
+		o.Log = sio.NewNopLogger()
+	}
+
+	return newAggregatedTcpResolver(p, o)
+}
+
+
 func NewGroupResolver(inner Resolver) Resolver {
 	return newGroupResolver(inner)
 }
@@ -74,7 +91,122 @@ func newTcpResolver(proto Protocol, opts *TcpResolverOptions) *tcpResolver {
 	return &this
 }
 
-func (this *tcpResolver) checkName(name string) bool {
+func (this *tcpResolver) Resolve(name string) ([]Route, []Protocol, error) {
+	var ret Route
+
+	this.log.Trace("resolve '%s' as new TCP connection",
+		this.log.Emph(0, name))
+
+	if !checkTcpName(name) {
+		return nil, nil, &ResolverInvalidNameError{ name }
+	}
+
+	ret = NewUnitLeafRoute(NewTcpConnection(name))
+
+	return []Route{ ret }, []Protocol{ this.proto }, nil
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type aggregatedTcpResolver struct {
+	log sio.Logger
+	proto Protocol
+}
+
+func newAggregatedTcpResolver(p Protocol, o *TcpResolverOptions) *aggregatedTcpResolver {
+	var this aggregatedTcpResolver
+
+	this.log = o.Log
+	this.proto = p
+
+	return &this
+}
+
+func (this *aggregatedTcpResolver) Resolve(name string) ([]Route, []Protocol, error) {
+	var index int
+	var ret Route
+	var err error
+	var n uint64
+
+	index = strings.Index(name, "*")
+	if index == -1 {
+		this.log.Trace("resolve '%s' as new TCP connection",
+			this.log.Emph(0, name))
+
+		if !checkTcpName(name) {
+			return nil, nil, &ResolverInvalidNameError{ name }
+		}
+
+		ret = NewUnitLeafRoute(NewTcpConnection(name))
+	} else {
+		n, err = strconv.ParseUint(name[:index], 10, 16)
+		if err != nil {
+			return nil, nil, &ResolverInvalidNameError{ name }
+		}
+
+		this.log.Trace("resolve '%s' as %d aggregated new TCP " +
+			"connections", this.log.Emph(0, name), n)
+
+		name = name[index+1:]
+
+		if !checkTcpName(name) {
+			return nil, nil, &ResolverInvalidNameError{ name }
+		}
+
+		ret = NewUnitLeafRoute(NewAggregatedTcpConnection(name,
+			this.proto, int(n)))
+	}
+
+	return []Route{ ret }, []Protocol{ this.proto }, nil
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type groupResolver struct {
+	inner Resolver
+}
+
+func newGroupResolver(inner Resolver) *groupResolver {
+	var this groupResolver
+
+	this.inner = inner
+
+	return &this
+}
+
+func (this *groupResolver) Resolve(name string) ([]Route, []Protocol, error) {
+	var retp, ps []Protocol
+	var retr, rs []Route
+	var part string
+	var err error
+
+	for _, part = range strings.Split(name, "+") {
+		rs, ps, err = this.inner.Resolve(part)
+		if err != nil {
+			continue
+		}
+
+		retr = append(retr, rs...)
+		retp = append(retp, ps...)
+	}
+
+	return retr, retp, nil
+}
+
+
+func (this *ResolverInvalidNameError) Error() string {
+	return fmt.Sprintf("invalid name '%s'", this.Name)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func checkTcpName(name string) bool {
 	var parts []string = strings.Split(name, ":")
 	var hostname, strport, label string
 	var err error
@@ -124,56 +256,4 @@ func (this *tcpResolver) checkName(name string) bool {
 	}
 
 	return true
-}
-
-func (this *tcpResolver) Resolve(name string) ([]Route, []Protocol, error) {
-	var ret Route
-
-	this.log.Trace("resolve '%s' as new TCP connection",
-		this.log.Emph(0, name))
-
-	if !this.checkName(name) {
-		return nil, nil, &ResolverInvalidNameError{ name }
-	}
-
-	ret = NewUnitLeafRoute(NewTcpConnection(name))
-
-	return []Route{ ret }, []Protocol{ this.proto }, nil
-}
-
-
-type groupResolver struct {
-	inner Resolver
-}
-
-func newGroupResolver(inner Resolver) *groupResolver {
-	var this groupResolver
-
-	this.inner = inner
-
-	return &this
-}
-
-func (this *groupResolver) Resolve(name string) ([]Route, []Protocol, error) {
-	var retp, ps []Protocol
-	var retr, rs []Route
-	var part string
-	var err error
-
-	for _, part = range strings.Split(name, "+") {
-		rs, ps, err = this.inner.Resolve(part)
-		if err != nil {
-			continue
-		}
-
-		retr = append(retr, rs...)
-		retp = append(retp, ps...)
-	}
-
-	return retr, retp, nil
-}
-
-
-func (this *ResolverInvalidNameError) Error() string {
-	return fmt.Sprintf("invalid name '%s'", this.Name)
 }
