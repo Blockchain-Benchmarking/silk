@@ -2,6 +2,7 @@ package net
 
 
 import (
+	"context"
 	"testing"
 )
 
@@ -241,4 +242,132 @@ func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	}
 
 	testMessagesEquality(in[:70], out, t)
+
+	setup.teardown()
+}
+
+func testFifoReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
+	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var outc <-chan []Message
+	var out []Message
+	var i int
+
+	defer setup.teardown()
+
+	in[70].decodingError = true
+
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+
+	for i = range in {
+		setup.sendc <- MessageProtocol{in[i], mockProtocol}
+	}
+
+	close(setup.sendc)
+
+	out = <-outc
+
+	if out == nil {
+		t.Errorf("timeout")
+	}
+
+	testMessagesEquality(in[:70], out, t)
+}
+
+
+// ----------------------------------------------------------------------------
+
+
+func TestReceiverAggregatorEmpty(t *testing.T) {
+	var r Receiver = NewSliceReceiverAggregator([]ReceiverProtocol{})
+	var more bool
+
+	_, more = <-r.Recv(mockProtocol)
+	if more {
+		t.Errorf("Recv")
+	}
+
+	_, more = <-r.RecvN(mockProtocol, 1)
+	if more {
+		t.Errorf("RecvN")
+	}
+}
+
+func TestReceiverAggregatorOne(t *testing.T) {
+	testFifoReceiver(t, func () *receiverTestSetup {
+		var addr string = findTcpAddr(t)
+		var cancel context.CancelFunc
+		var ctx context.Context
+		var c, a Connection
+		var s Accepter
+
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
+		c = NewTcpConnection(addr)
+		a = <-s.Accept()
+
+		return &receiverTestSetup{
+			receiver: NewSliceReceiverAggregator(
+				[]ReceiverProtocol{ ReceiverProtocol{
+					R: c,
+					P: mockProtocol,
+				}}),
+			sendc: a.Send(),
+			teardown: func () {
+				cancel()
+				close(c.Send())
+			},
+		}
+	})
+}
+
+func TestReceiverAggregatorMany(t *testing.T) {
+	testReceiver(t, func () *receiverTestSetup {
+		var addr string = findTcpAddr(t)
+		var sendc chan MessageProtocol
+		var cancel context.CancelFunc
+		var rps []ReceiverProtocol
+		var ctx context.Context
+		var cs, as []Connection
+		var c Connection
+		var s Accepter
+		var seq []int
+		var i int
+
+		ctx, cancel = context.WithCancel(context.Background())
+		s = NewTcpServerWith(addr, &TcpServerOptions{ Context: ctx })
+
+		for i = 0; i < 10; i++ {
+			c = NewTcpConnection(addr)
+			rps = append(rps, ReceiverProtocol{ c, mockProtocol })
+			cs = append(cs, c)
+			as = append(as, <-s.Accept())
+		}
+
+		seq = []int{ 0, 0, 1, 2, 7, 3, 4, 9, 9, 0, 1, 8 }
+		sendc = make(chan MessageProtocol, 128)
+		go func () {
+			var mp MessageProtocol
+			var n int = 0
+
+			for mp = range sendc {
+				as[seq[n]].Send() <- mp
+				n = (n + 1) % len(seq)
+			}
+
+			for n = range as {
+				close(as[n].Send())
+			}
+		}()
+
+		return &receiverTestSetup{
+			receiver: NewSliceReceiverAggregator(rps),
+			sendc: sendc,
+			teardown: func () {
+				cancel()
+				for _, c = range cs {
+					close(c.Send())
+				}
+			},
+		}
+	})
 }
