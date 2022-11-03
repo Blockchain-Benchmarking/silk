@@ -1,9 +1,12 @@
 BIN := bin/
 
+
 export GOPATH=$(PWD)/.go/
 
+
 modules := io net run ui util/atomic util/rand
-mains := main run server
+mains := main run send server
+
 
 T ?= $(modules)
 V := 1

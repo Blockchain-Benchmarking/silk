@@ -15,7 +15,7 @@ import (
 
 
 const ProgramName = "silk"
-const ProgramVersion = "0.1.0"
+const ProgramVersion = "0.2.0"
 const AuthorName = "Gauthier Voron"
 const AuthorEmail = "gauthier.voron@epfl.ch"
 
@@ -48,7 +48,9 @@ Usage: %s [-h | --help] [-l<path> | --log=<path>] [-v | --verbose[=<str>]]
 
 Available commands:
 
-  run         Run a command on a remote server
+  run         Run a command on remote servers
+
+  send        Send files to remote servers
 
   server      Start a server
 
@@ -220,7 +222,7 @@ func main() {
 	case "server":
 		serverMain(cli, verbose)
 	case "send":
-		fatal("unimplemented")
+		sendMain(cli, verbose)
 	default:
 		fatal("unknown command operand '%s'", command)
 	}
