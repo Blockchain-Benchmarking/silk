@@ -69,11 +69,13 @@ func newAgent(name string, conn net.Connection, running *sync.WaitGroup, log sio
 func (this *agent) run(running, using *sync.WaitGroup) {
 	var stdout, stderr bool
 	var msg net.Message
+	var exited bool
 
 	this.log.Debug("start %s", this.log.Emph(0, this.name))
 
 	stdout = true
 	stderr = true
+	exited = false
 
 	loop: for msg = range this.conn.Recv(protocol) {
 		switch m := msg.(type) {
@@ -82,6 +84,7 @@ func (this *agent) run(running, using *sync.WaitGroup) {
 			this.log.Trace("receive job exit: %d",
 				this.log.Emph(1, m.code))
 			this.exit.Store(m.code)
+			exited = true
 			break loop
 
 		case *jobStdoutData:
@@ -133,13 +136,18 @@ func (this *agent) run(running, using *sync.WaitGroup) {
 	}
 
 	if stdout {
-		this.log.Warn("exit process with open stdout")
+		this.log.Warn("close with open stdout")
 		close(this.stdoutc)
 	}
 
 	if stderr {
-		this.log.Warn("exit process with open stderr")
+		this.log.Warn("close with open stderr")
 		close(this.stderrc)
+	}
+
+	if exited == false {
+		this.log.Warn("close before process exit")
+		this.exit.Store(uint8(255))
 	}
 
 	close(this.waitc)
