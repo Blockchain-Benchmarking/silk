@@ -84,6 +84,23 @@ type OptionVariadic interface {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
+type OptBool struct {
+}
+
+func (this OptBool) New() OptionBool {
+	return newOptionBool(&this)
+}
+
+type OptionBool interface {
+	Option
+
+	Value() bool
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 type OptCall struct {
 	// The function to call if specified without argument.
 	//
@@ -215,7 +232,37 @@ func (this *optionBase) Assignments() []OptionAssignment {
 	return this.assignments
 }
 
-// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type optionBool struct {
+	optionBase
+	value bool
+}
+
+func newOptionBool(params *OptBool) *optionBool {
+	var this optionBool
+
+	this.optionBase.init()
+	this.value = false
+
+	return &this
+}
+
+func (this *optionBool) Assign(state ParsingState) error {
+	this.optionBase.assign(state)
+	this.value = true
+	return nil
+}
+
+func (this *optionBool) Value() bool {
+	return this.value
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
 
 func newOptionCall(params *OptCall) Option {
 	if (params.WithoutArg != nil) && (params.WithArg == nil) {
