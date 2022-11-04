@@ -67,7 +67,7 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	this.log = opts.Log
 	this.route = route
 	this.acceptc = make(chan Agent)
-	this.stdinc = make(chan []byte)
+	this.stdinc = make(chan []byte, 32)
 	this.agentStdin = opts.AgentStdin
 	this.waitc = make(chan struct{})
 
