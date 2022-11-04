@@ -58,6 +58,11 @@ type JobOptions struct {
 	// Otherwise it executes it in the server cwd.
 	Cwd string
 
+	// If not `nil` then ignore the `name` argument of `NewJobWith` and
+	// transfer what is `Read` from this parameter to the remote servers
+	// and execute it.
+	LocalExec io.ReadCloser
+
 	// If `true` then the `Job.Signal()` channel is open.
 	Signal bool
 
@@ -125,25 +130,44 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 		close(this.stdinc)
 	}
 
-	m.name = name
+	if opts.LocalExec != nil {
+		m.name = ""
+	} else if name == "" {
+		this.prematureExit()
+		return &this
+	} else {
+		m.name = name
+	}
+
 	m.args = args
 	m.cwd = opts.Cwd
 
 	err = m.check()
 	if err != nil {
+		this.prematureExit()
 		return &this
 	}
 
-	go this.initiate(&m, p)
-	go this.run()
+	go this.initiate(&m, p, opts)
 
 	return &this
 }
 
-func (this *job) initiate(m *Message, p net.Protocol) {
+func (this *job) prematureExit() {
+	close(this.acceptc)
+	close(this.waitc)
+}
+
+func (this *job) initiate(m *Message, p net.Protocol, opts *JobOptions) {
 	var transmitting sync.WaitGroup
 
 	this.route.Send() <- net.MessageProtocol{ m, p }
+
+	if opts.LocalExec != nil {
+		this.sendExecutable(opts.LocalExec)
+	}
+
+	go this.run()
 
 	transmitting.Add(2)
 
