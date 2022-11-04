@@ -84,6 +84,7 @@ func doSendOne(route, targetDirectory, cwd, source string, compress bool, log si
 	}, nroute, protocol, &run.JobOptions{
 		Log: log.WithLocalContext("job[tar]"),
 		Cwd: targetDirectory,
+		Stdin: true,
 	})
 
 	for agent = range job.Accept() {

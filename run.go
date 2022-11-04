@@ -48,8 +48,8 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 	nroute = net.NewRoute([]string{ route }, resolver)
 	job = run.NewJobWith(name, args, nroute, protocol, &run.JobOptions{
 		Log: log.WithLocalContext("job[%s]", name),
-
 		Cwd: cwd,
+		Stdin: true,
 	})
 
 	for agent = range job.Accept() {

@@ -23,6 +23,8 @@ type JobOptions struct {
 	Log sio.Logger
 
 	Cwd string
+
+	Stdin bool
 }
 
 
@@ -64,6 +66,10 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	this.acceptc = make(chan Agent)
 	this.stdinc = make(chan []byte)
 	this.waitc = make(chan struct{})
+
+	if opts.Stdin == false {
+		close(this.stdinc)
+	}
 
 	m.name = name
 	m.args = args
