@@ -86,10 +86,6 @@ const MaxJobArgumentLength = math.MaxUint16
 const MaxJobPathLength = math.MaxUint16
 
 
-type ServiceNameTooLongError struct {
-	Name string
-}
-
 type JobNameTooLongError struct {
 	Name string
 }
@@ -112,6 +108,10 @@ type JobUnknownSignalError struct {
 
 type JobUnknownSignalCodeError struct {
 	Code uint8
+}
+
+type ServiceNameTooLongError struct {
+	Name string
 }
 
 
