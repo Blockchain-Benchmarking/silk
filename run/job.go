@@ -12,27 +12,61 @@ import (
 // ----------------------------------------------------------------------------
 
 
+// A remote `Job`.
+//
+// This is an interface for a `Process` running on one or many remote servers
+// and managed by a `Service`.
+//
+// Each instance of the remote `Process` (one per remote server) is represented
+// by an `Agent`.
+// This `Job` can broadcast `Process`es inputs to all instances.
+//
 type Job interface {
+	// Accept an `Agent` representing a `Process` instance running on a
+	// remote server.
+	//
 	Accept() <-chan Agent
 
+	// Return a channel to send `os.Signal`s to deliver to all instances
+	// of the remote `Process`.
+	// This channel is closed unless `JobOption.Signal` was `true`.
+	//
 	Signal() chan<- os.Signal
 
+	// Return a channel to send `[]byte`s to write on the standard input of
+	// all instances of the remote `Process`.
+	// Note that the `[]byte`s sent on this channel are not sequentially
+	// consistent with `[]byte`s sent on the `Agent.Stdin()` channels.
+	// This channel is closed unless `JobOption.Stdin` was `true`.
+	//
 	Stdin() chan<- []byte
 
+	// Wait for all instances of the remote `Process` to terminate,
+	// including the ones for which the `Agent` has not been `Accept`ed.
+	//
 	Wait() <-chan struct{}
 }
 
+// Options for controlling a `Job` behavior.
+//
 type JobOptions struct {
+	// Log what happens on this `sio.Logger` if not `nil`.
 	Log sio.Logger
 
+	// Remote server executes the `Process` in `Cwd` if not empty.
+	// Otherwise it executes it in the server cwd.
 	Cwd string
 
+	// If `true` then the `Job.Signal()` channel is open.
 	Signal bool
 
+	// If `true` then the `Job.Stdin()` channel is open.
 	Stdin bool
 
+	// If `true` then the `Accept`ed `Agent.Signal()` channel are open.
 	AgentSignal bool
 
+	// If `true` then the `Accept`ed `Agent.Stdin()` channel are open.
 	AgentStdin bool
 }
 
