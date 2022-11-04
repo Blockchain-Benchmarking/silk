@@ -2,6 +2,7 @@ package run
 
 
 import (
+	"os"
 	sio "silk/io"
 	"silk/net"
 	"sync"
@@ -14,6 +15,8 @@ import (
 
 type Agent interface {
 	Name() string
+
+	Signal() chan<- os.Signal
 
 	Stdin() chan<- []byte
 
@@ -34,6 +37,7 @@ type agent struct {
 	log sio.Logger
 	name string
 	conn net.Connection
+	signalc chan os.Signal
 	stdinc chan []byte
 	stdoutc chan []byte
 	stderrc chan []byte
@@ -48,12 +52,13 @@ func newAgent(name string, conn net.Connection, running *sync.WaitGroup, log sio
 	this.log = log
 	this.name = name
 	this.conn = conn
-	this.stdoutc = make(chan []byte)
-	this.stderrc = make(chan []byte)
-	this.stdinc = make(chan []byte)
+	this.signalc = make(chan os.Signal, 8)
+	this.stdinc = make(chan []byte, 32)
+	this.stdoutc = make(chan []byte, 32)
+	this.stderrc = make(chan []byte, 32)
 	this.waitc = make(chan struct{})
 
-	using.Add(2)
+	using.Add(3)
 	go func () {
 		using.Wait()
 		this.log.Trace("close")
@@ -61,7 +66,8 @@ func newAgent(name string, conn net.Connection, running *sync.WaitGroup, log sio
 	}()
 
 	go this.run(running, &using)
-	go this.transmit(&using)
+	go this.transmitSignal(&using)
+	go this.transmitStdin(&using)
 
 	return &this
 }
@@ -160,7 +166,29 @@ func (this *agent) run(running, using *sync.WaitGroup) {
 	}
 }
 
-func (this *agent) transmit(using *sync.WaitGroup) {
+func (this *agent) transmitSignal(using *sync.WaitGroup) {
+	var s os.Signal
+	var scode uint8
+	var err error
+
+	for s = range this.signalc {
+		scode, err = signalCode(s)
+		if err != nil {
+			this.log.Warn("%s", err.Error())
+			continue
+		}
+
+		this.log.Trace("send signal %s", this.log.Emph(1, s.String()))
+		this.conn.Send() <- net.MessageProtocol{
+			M: &jobSignal{ scode },
+			P: protocol,
+		}
+	}
+
+	using.Done()
+}
+
+func (this *agent) transmitStdin(using *sync.WaitGroup) {
 	var b []byte
 
 	for b = range this.stdinc {
@@ -182,6 +210,10 @@ func (this *agent) transmit(using *sync.WaitGroup) {
 
 func (this *agent) Name() string {
 	return this.name
+}
+
+func (this *agent) Signal() chan<- os.Signal {
+	return this.signalc
 }
 
 func (this *agent) Stdin() chan<- []byte {

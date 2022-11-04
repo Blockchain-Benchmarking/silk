@@ -31,6 +31,8 @@ type JobOptions struct {
 
 	Stdin bool
 
+	AgentSignal bool
+
 	AgentStdin bool
 }
 
@@ -61,6 +63,7 @@ type job struct {
 	acceptc chan Agent
 	signalc chan os.Signal
 	stdinc chan []byte
+	agentSignal bool
 	agentStdin bool
 	waitc chan struct{}
 }
@@ -75,6 +78,7 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	this.acceptc = make(chan Agent)
 	this.signalc = make(chan os.Signal, 8)
 	this.stdinc = make(chan []byte, 32)
+	this.agentSignal = opts.AgentSignal
 	this.agentStdin = opts.AgentStdin
 	this.waitc = make(chan struct{})
 
@@ -207,6 +211,10 @@ func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitG
 		running.Add(1)
 
 		agent = newAgent(m.name, conn, running, log)
+
+		if this.agentSignal == false {
+			close(agent.Signal())
+		}
 
 		if this.agentStdin == false {
 			close(agent.Stdin())
