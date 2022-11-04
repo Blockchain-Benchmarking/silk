@@ -77,8 +77,8 @@ func doSendOne(route, targetDirectory, cwd, source string, compress bool, log si
 		protocol, &net.TcpResolverOptions{
 			Log: log.WithLocalContext("resolve"),
 		}))
-
 	nroute = net.NewRoute([]string{ route }, resolver)
+
 	job = run.NewJobWith("tar", []string{
 		fmt.Sprintf("-ix%spf", opt), "-",
 	}, nroute, protocol, &run.JobOptions{
