@@ -241,12 +241,22 @@ func (this *serviceProcess) run() {
 func (this *serviceProcess) transmit(proc Process) {
 	var stdinBcast, stdinUcast bool
 	var msg net.Message
+	var sig os.Signal
+	var err error
 
 	stdinBcast = true
 	stdinUcast = true
 
 	for msg = range this.conn.Recv(protocol) {
 		switch m := msg.(type) {
+
+		case *jobSignal:
+			sig, err = codeSignal(m.signum)
+			if err != nil {
+				this.log.Warn("%s", err.Error())
+			} else {
+				proc.Kill(sig)
+			}
 
 		case *jobStdinData:
 			if (stdinBcast == false) && (stdinUcast == false) {
