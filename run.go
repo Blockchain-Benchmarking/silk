@@ -17,7 +17,8 @@ import (
 
 
 func runUsage() {
-	fmt.Printf(`Usage: %s run [-C<path> | --cwd=<path>] <route> <cmd> [<args>]
+	fmt.Printf(`Usage: %s run [-C<path> | --cwd=<path>] [-L | --local-command] <route> <cmd>
+         [<args>]
 
 Run a command on remote server.
 The <route> indicate on what remote server to run the command.
@@ -26,6 +27,11 @@ Options:
 
   -C<path>, --cwd=<path>      Change current directory to the given <path>
                               before to run the command.
+
+  -L, --local-command         Interpret <cmd> as a local file to be sent to
+                              the remote server and to be executed.
+                              If <cmd> is '-' then read the file to be executed
+                              on the standard input.
 
 `, os.Args[0])
 
