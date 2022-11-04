@@ -589,10 +589,6 @@ func codeSignal(scode uint8) (os.Signal, error) {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-func (this *ServiceNameTooLongError) Error() string {
-	return fmt.Sprintf("service name too long: %s", this.Name)
-}
-
 func (this *JobNameTooLongError) Error() string {
 	return fmt.Sprintf("job name too long: %s", this.Name)
 }
@@ -615,6 +611,10 @@ func (this *JobUnknownSignalError) Error() string {
 
 func (this *JobUnknownSignalCodeError) Error() string {
 	return fmt.Sprintf("unknown signal code: %d", this.Code)
+}
+
+func (this *ServiceNameTooLongError) Error() string {
+	return fmt.Sprintf("service name too long: %s", this.Name)
 }
 
 func (this *UnknownMessageError) Error() string {
