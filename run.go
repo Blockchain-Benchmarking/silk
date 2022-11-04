@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	sio "silk/io"
 	"silk/net"
 	"silk/run"
@@ -44,13 +45,16 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 		protocol, &net.TcpResolverOptions{
 			Log: log.WithLocalContext("resolve"),
 		}))
-
 	nroute = net.NewRoute([]string{ route }, resolver)
+
 	job = run.NewJobWith(name, args, nroute, protocol, &run.JobOptions{
 		Log: log.WithLocalContext("job[%s]", name),
 		Cwd: cwd,
+		Signal: true,
 		Stdin: true,
 	})
+
+	signal.Notify(job.Signal(), os.Interrupt)
 
 	for agent = range job.Accept() {
 		go sio.WriteFromChannel(os.Stdout, agent.Stdout())
@@ -67,6 +71,7 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 	go sio.ReadInChannel(os.Stdin, job.Stdin())
 
 	<-job.Wait()
+	close(job.Signal())
 }
 
 
