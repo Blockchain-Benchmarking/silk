@@ -3,6 +3,7 @@ package run
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"os/exec"
@@ -159,6 +160,7 @@ type serviceProcess struct {
 	log sio.Logger
 	req *Message
 	conn net.Connection
+	tempExec *os.File
 }
 
 func newServiceProcess(parent *service, req *Message, conn net.Connection, log sio.Logger) *serviceProcess {
@@ -168,6 +170,7 @@ func newServiceProcess(parent *service, req *Message, conn net.Connection, log s
 	this.log = log
 	this.req = req
 	this.conn = conn
+	this.tempExec = nil
 
 	return &this
 }
@@ -240,6 +243,54 @@ func (this *serviceProcess) run() {
 		M: &jobExit{ proc.Exit() },
 		P: protocol,
 	}
+}
+
+func (this *serviceProcess) receiveExecutable() error {
+	var msg net.Message
+	var err error
+
+	this.tempExec, err = ioutil.TempFile("", "silk-run.*")
+	if err != nil {
+		return err
+	}
+
+	this.log.Trace("receive executable in %s",
+		this.log.Emph(0, this.tempExec.Name()))
+
+	loop: for {
+		msg = <-this.conn.RecvN(protocol, 1)
+
+		switch m := msg.(type) {
+		case *serviceExecutableData:
+			this.log.Trace("receive %d bytes of executable",
+				len(m.content))
+			_, err = this.tempExec.Write(m.content)
+			if err != nil {
+				os.Remove(this.tempExec.Name())
+				return err
+			}
+		case *serviceExecutableDone:
+			this.log.Trace("receive end of executable")
+			break loop
+		default:
+			os.Remove(this.tempExec.Name())
+			return &UnknownMessageError{ msg }
+		}
+	}
+
+	err = this.tempExec.Chmod(0500)
+	if err != nil {
+		os.Remove(this.tempExec.Name())
+		return err
+	}
+
+	err = this.tempExec.Close()
+	if err != nil {
+		os.Remove(this.tempExec.Name())
+		return err
+	}
+
+	return nil
 }
 
 func (this *serviceProcess) transmit(proc Process) {
