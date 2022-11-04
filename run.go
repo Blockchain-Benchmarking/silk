@@ -35,24 +35,35 @@ Options:
 // ----------------------------------------------------------------------------
 
 
-func runCommand(route, name string, args []string, cwd string, log sio.Logger){
+type runConfig struct {
+	log sio.Logger
+	route string
+	name string
+	args []string
+	cwd ui.OptionString
+}
+
+
+func doRun(config *runConfig) {
 	var resolver net.Resolver
-	var nroute net.Route
+	var route net.Route
 	var agent run.Agent
 	var job run.Job
 
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
 		protocol, &net.TcpResolverOptions{
-			Log: log.WithLocalContext("resolve"),
+			Log: config.log.WithLocalContext("resolve"),
 		}))
-	nroute = net.NewRoute([]string{ route }, resolver)
+	route = net.NewRoute([]string{ config.route }, resolver)
 
-	job = run.NewJobWith(name, args, nroute, protocol, &run.JobOptions{
-		Log: log.WithLocalContext("job[%s]", name),
-		Cwd: cwd,
-		Signal: true,
-		Stdin: true,
-	})
+	job = run.NewJobWith(config.name, config.args, route, protocol,
+		&run.JobOptions{
+			Cwd: config.cwd.Value(),
+			Log: config.log.WithLocalContext("job[%s]",
+				config.name),
+			Signal: true,
+			Stdin: true,
+		})
 
 	signal.Notify(job.Signal(), os.Interrupt)
 
@@ -62,9 +73,9 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 
 		go func (agent run.Agent) {
 			<-agent.Wait()
-			log.Info("agent %s exits with %d",
-				log.Emph(0, agent.Name()),
-				log.Emph(1, agent.Exit()))
+			config.log.Info("agent %s exits with %d",
+				config.log.Emph(0, agent.Name()),
+				config.log.Emph(1, agent.Exit()))
 		}(agent)
 	}
 
@@ -79,35 +90,37 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 
 
 func runMain(cli ui.Cli, verbose *verbosity) {
-	var cwdOption ui.OptionString = ui.OptString{}.New()
+	var config runConfig = runConfig{
+		cwd: ui.OptString{}.New(),
+	}
 	var helpOption ui.Option = ui.OptCall{
 		WithoutArg: func () error { runUsage() ; return nil },
 	}.New()
-	var route, name string
-	var args []string
 	var err error
 	var ok bool
 
+	cli.AddOption('C', "cwd", config.cwd)
 	cli.DelOption('h', "help")
 	cli.AddOption('h', "help", helpOption)
-	cli.AddOption('C', "cwd", cwdOption)
 
 	err = cli.Parse()
 	if err != nil {
 		fatale(err)
 	}
 
-	route, ok = cli.SkipWord()
+	config.route, ok = cli.SkipWord()
 	if ok == false {
 		fatal("missing route operand")
 	}
 
-	name, ok = cli.SkipWord()
+	config.name, ok = cli.SkipWord()
 	if ok == false {
 		fatal("missing cmd operand")
 	}
 
-	args = cli.Arguments()[cli.Parsed():]
+	config.args = cli.Arguments()[cli.Parsed():]
 
-	runCommand(route, name, args, cwdOption.Value(), verbose.log())
+	config.log = verbose.log()
+
+	doRun(&config)
 }
