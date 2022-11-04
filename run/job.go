@@ -2,6 +2,7 @@ package run
 
 
 import (
+	"io"
 	"os"
 	sio "silk/io"
 	"silk/net"
@@ -153,6 +154,26 @@ func (this *job) initiate(m *Message, p net.Protocol) {
 
 	this.log.Trace("close")
 	close(this.route.Send())
+}
+
+func (this *job) sendExecutable(localExec io.ReadCloser) {
+	var b []byte
+
+	for b = range sio.NewReaderChannel(localExec) {
+		this.log.Trace("send %d bytes of executable", len(b))
+		this.route.Send() <- net.MessageProtocol{
+			M: &serviceExecutableData{ b },
+			P: protocol,
+		}
+	}
+
+	this.log.Trace("send end of executable")
+	this.route.Send() <- net.MessageProtocol{
+		M: &serviceExecutableDone{},
+		P: protocol,
+	}
+
+	localExec.Close()
 }
 
 func (this *job) run() {
