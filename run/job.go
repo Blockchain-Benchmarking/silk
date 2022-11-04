@@ -51,9 +51,6 @@ type Job interface {
 // Options for controlling a `Job` behavior.
 //
 type JobOptions struct {
-	// Log what happens on this `sio.Logger` if not `nil`.
-	Log sio.Logger
-
 	// Remote server executes the `Process` in `Cwd` if not empty.
 	// Otherwise it executes it in the server cwd.
 	Cwd string
@@ -62,6 +59,9 @@ type JobOptions struct {
 	// transfer what is `Read` from this parameter to the remote servers
 	// and execute it.
 	LocalExec io.ReadCloser
+
+	// Log what happens on this `sio.Logger` if not `nil`.
+	Log sio.Logger
 
 	// If `true` then the `Job.Signal()` channel is open.
 	Signal bool
