@@ -16,6 +16,8 @@ import (
 type Process interface {
 	Exit() uint8
 
+	Kill(os.Signal)
+
 	Stdin(data []byte) error
 
 	CloseStdin()
@@ -166,6 +168,11 @@ func (this *process) run() error {
 	go this.waitTermination()
 
 	return nil
+}
+
+func (this *process) Kill(sig os.Signal) {
+	this.log.Trace("send signal %s", this.log.Emph(1, sig.String()))
+	this.inner.Process.Signal(sig)
 }
 
 func (this *process) Stdin(data []byte) error {
