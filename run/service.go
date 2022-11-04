@@ -293,8 +293,8 @@ func (this *serviceProcess) transmit(proc Process) {
 			}
 
 		default:
-			this.log.Warn("unexpected message: %T",
-				this.log.Emph(2, msg))
+			err = &UnknownMessageError{ msg }
+			this.log.Warn("%s", err.Error())
 			continue
 
 		}
