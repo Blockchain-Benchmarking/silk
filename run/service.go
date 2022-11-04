@@ -12,6 +12,7 @@ import (
 	"silk/util/rand"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 
@@ -103,6 +104,14 @@ type JobArgumentTooLongError struct {
 
 type JobPathTooLongError struct {
 	Path string
+}
+
+type JobUnknownSignalError struct {
+	Signal os.Signal
+}
+
+type JobUnknownSignalCodeError struct {
+	Code uint8
 }
 
 
@@ -478,6 +487,80 @@ func (this *jobStderrClose) Decode(source sio.Source) error {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
+func signalCode(sig os.Signal) (uint8, error) {
+	switch sig {
+	case syscall.SIGABRT:   return  0, nil
+	case syscall.SIGALRM:   return  1, nil
+	case syscall.SIGBUS:    return  2, nil
+	case syscall.SIGCHLD:   return  3, nil
+	case syscall.SIGCONT:   return  4, nil
+	case syscall.SIGFPE:    return  5, nil
+	case syscall.SIGHUP:    return  6, nil
+	case syscall.SIGILL:    return  7, nil
+	case syscall.SIGINT:    return  8, nil
+	case syscall.SIGIO:     return  9, nil
+	case syscall.SIGPIPE:   return 10, nil
+	case syscall.SIGPROF:   return 11, nil
+	case syscall.SIGPWR:    return 12, nil
+	case syscall.SIGQUIT:   return 13, nil
+	case syscall.SIGSEGV:   return 14, nil
+	case syscall.SIGSTKFLT: return 15, nil
+	case syscall.SIGSYS:    return 16, nil
+	case syscall.SIGTERM:   return 17, nil
+	case syscall.SIGTRAP:   return 18, nil
+	case syscall.SIGTSTP:   return 19, nil
+	case syscall.SIGTTIN:   return 20, nil
+	case syscall.SIGTTOU:   return 21, nil
+	case syscall.SIGURG:    return 22, nil
+	case syscall.SIGUSR1:   return 23, nil
+	case syscall.SIGUSR2:   return 24, nil
+	case syscall.SIGVTALRM: return 25, nil
+	case syscall.SIGWINCH:  return 26, nil
+	case syscall.SIGXCPU:   return 27, nil
+	case syscall.SIGXFSZ:   return 28, nil
+	default: return 0, &JobUnknownSignalError{ sig }
+	}
+}
+
+func codeSignal(scode uint8) (os.Signal, error) {
+	switch scode {
+	case  0: return syscall.SIGABRT,   nil
+	case  1: return syscall.SIGALRM,   nil
+	case  2: return syscall.SIGBUS,    nil
+	case  3: return syscall.SIGCHLD,   nil
+	case  4: return syscall.SIGCONT,   nil
+	case  5: return syscall.SIGFPE,    nil
+	case  6: return syscall.SIGHUP,    nil
+	case  7: return syscall.SIGILL,    nil
+	case  8: return syscall.SIGINT,    nil
+	case  9: return syscall.SIGIO,     nil
+	case 10: return syscall.SIGPIPE,   nil
+	case 11: return syscall.SIGPROF,   nil
+	case 12: return syscall.SIGPWR,    nil
+	case 13: return syscall.SIGQUIT,   nil
+	case 14: return syscall.SIGSEGV,   nil
+	case 15: return syscall.SIGSTKFLT, nil
+	case 16: return syscall.SIGSYS,    nil
+	case 17: return syscall.SIGTERM,   nil
+	case 18: return syscall.SIGTRAP,   nil
+	case 19: return syscall.SIGTSTP,   nil
+	case 20: return syscall.SIGTTIN,   nil
+	case 21: return syscall.SIGTTOU,   nil
+	case 22: return syscall.SIGURG,    nil
+	case 23: return syscall.SIGUSR1,   nil
+	case 24: return syscall.SIGUSR2,   nil
+	case 25: return syscall.SIGVTALRM, nil
+	case 26: return syscall.SIGWINCH,  nil
+	case 27: return syscall.SIGXCPU,   nil
+	case 28: return syscall.SIGXFSZ,   nil
+	default: return nil, &JobUnknownSignalCodeError{ scode }
+	}
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
 func (this *ServiceNameTooLongError) Error() string {
 	return fmt.Sprintf("service name too long: %s", this.Name)
 }
@@ -496,4 +579,12 @@ func (this *JobArgumentTooLongError) Error() string {
 
 func (this *JobPathTooLongError) Error() string {
 	return fmt.Sprintf("job path too long: %s", this.Path)
+}
+
+func (this *JobUnknownSignalError) Error() string {
+	return fmt.Sprintf("unknown signal: %s", this.Signal.String())
+}
+
+func (this *JobUnknownSignalCodeError) Error() string {
+	return fmt.Sprintf("unknown signal code: %d", this.Code)
 }
