@@ -2,6 +2,7 @@ package run
 
 
 import (
+	"os"
 	sio "silk/io"
 	"silk/net"
 	"sync"
@@ -14,6 +15,8 @@ import (
 type Job interface {
 	Accept() <-chan Agent
 
+	Signal() chan<- os.Signal
+
 	Stdin() chan<- []byte
 
 	Wait() <-chan struct{}
@@ -23,6 +26,8 @@ type JobOptions struct {
 	Log sio.Logger
 
 	Cwd string
+
+	Signal bool
 
 	Stdin bool
 
@@ -54,6 +59,7 @@ type job struct {
 	log sio.Logger
 	route net.Route
 	acceptc chan Agent
+	signalc chan os.Signal
 	stdinc chan []byte
 	agentStdin bool
 	waitc chan struct{}
@@ -67,9 +73,14 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	this.log = opts.Log
 	this.route = route
 	this.acceptc = make(chan Agent)
+	this.signalc = make(chan os.Signal, 8)
 	this.stdinc = make(chan []byte, 32)
 	this.agentStdin = opts.AgentStdin
 	this.waitc = make(chan struct{})
+
+	if opts.Signal == false {
+		close(this.signalc)
+	}
 
 	if opts.Stdin == false {
 		close(this.stdinc)
@@ -91,8 +102,19 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 }
 
 func (this *job) initiate(m *Message, p net.Protocol) {
+	var transmitting sync.WaitGroup
+
 	this.route.Send() <- net.MessageProtocol{ m, p }
-	this.transmit()
+
+	transmitting.Add(2)
+
+	go this.transmitSignal(&transmitting)
+	go this.transmitStdin(&transmitting)
+
+	transmitting.Wait()
+
+	this.log.Trace("close")
+	close(this.route.Send())
 }
 
 func (this *job) run() {
@@ -123,7 +145,29 @@ func (this *job) run() {
 	close(this.waitc)
 }
 
-func (this *job) transmit() {
+func (this *job) transmitSignal(transmitting *sync.WaitGroup) {
+	var s os.Signal
+	var scode uint8
+	var err error
+
+	for s = range this.signalc {
+		scode, err = signalCode(s)
+		if err != nil {
+			this.log.Warn("%s", err.Error())
+			continue
+		}
+
+		this.log.Trace("send signal %s", this.log.Emph(1, s.String()))
+		this.route.Send() <- net.MessageProtocol{
+			M: &jobSignal{ scode },
+			P: protocol,
+		}
+	}
+
+	transmitting.Done()
+}
+
+func (this *job) transmitStdin(transmitting *sync.WaitGroup) {
 	var b []byte
 
 	for b = range this.stdinc {
@@ -140,8 +184,7 @@ func (this *job) transmit() {
 		P: protocol,
 	}
 
-	this.log.Trace("close")
-	close(this.route.Send())
+	transmitting.Done()
 }
 
 func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitGroup, log sio.Logger) {
@@ -180,6 +223,10 @@ func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitG
 
 func (this *job) Accept() <-chan Agent {
 	return this.acceptc
+}
+
+func (this *job) Signal() chan<- os.Signal {
+	return this.signalc
 }
 
 func (this *job) Stdin() chan<- []byte {
