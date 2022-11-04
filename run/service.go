@@ -114,6 +114,10 @@ type ServiceNameTooLongError struct {
 	Name string
 }
 
+type UnknownMessageError struct {
+	Msg net.Message
+}
+
 
 // ----------------------------------------------------------------------------
 
@@ -611,4 +615,8 @@ func (this *JobUnknownSignalError) Error() string {
 
 func (this *JobUnknownSignalCodeError) Error() string {
 	return fmt.Sprintf("unknown signal code: %d", this.Code)
+}
+
+func (this *UnknownMessageError) Error() string {
+	return fmt.Sprintf("unknown message: %T", this.Msg)
 }
