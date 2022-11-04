@@ -373,6 +373,8 @@ func (this *Message) Decode(source sio.Source) error {
 
 var protocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
 	  0: &serviceName{},
+	  1: &serviceExecutableData{},
+	  2: &serviceExecutableDone{},
 
 	100: &jobExit{},
 	101: &jobStdinData{},
@@ -396,6 +398,31 @@ func (this *serviceName) Encode(sink sio.Sink) error {
 
 func (this *serviceName) Decode(source sio.Source) error {
 	return source.ReadString8(&this.name).Error()
+}
+
+
+type serviceExecutableData struct {
+	content []byte
+}
+
+func (this *serviceExecutableData) Encode(sink sio.Sink) error {
+	return sink.WriteBytes32(this.content).Error()
+}
+
+func (this *serviceExecutableData) Decode(source sio.Source) error {
+	return source.ReadBytes32(&this.content).Error()
+}
+
+
+type serviceExecutableDone struct {
+}
+
+func (this *serviceExecutableDone) Encode(sink sio.Sink) error {
+	return sink.Error()
+}
+
+func (this *serviceExecutableDone) Decode(source sio.Source) error {
+	return source.Error()
 }
 
 
