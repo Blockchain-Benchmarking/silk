@@ -90,8 +90,6 @@ func doSendOne(route, targetDirectory, cwd, source string, compress bool, log si
 	for agent = range job.Accept() {
 		log.Info("agent %s receive", log.Emph(0, agent.Name()))
 
-		close(agent.Stdin())
-
 		go sio.WriteFromChannel(os.Stdout, agent.Stdout())
 		go sio.WriteFromChannel(os.Stderr, agent.Stderr())
 

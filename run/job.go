@@ -25,6 +25,8 @@ type JobOptions struct {
 	Cwd string
 
 	Stdin bool
+
+	AgentStdin bool
 }
 
 
@@ -53,6 +55,7 @@ type job struct {
 	route net.Route
 	acceptc chan Agent
 	stdinc chan []byte
+	agentStdin bool
 	waitc chan struct{}
 }
 
@@ -65,6 +68,7 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	this.route = route
 	this.acceptc = make(chan Agent)
 	this.stdinc = make(chan []byte)
+	this.agentStdin = opts.AgentStdin
 	this.waitc = make(chan struct{})
 
 	if opts.Stdin == false {
@@ -142,6 +146,7 @@ func (this *job) transmit() {
 
 func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitGroup, log sio.Logger) {
 	var msg net.Message
+	var agent Agent
 	var more bool
 
 	defer accepting.Done()
@@ -157,7 +162,14 @@ func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitG
 	case *serviceName:
 		log.Trace("receive service name: %s", log.Emph(0, m.name))
 		running.Add(1)
-		this.acceptc <- newAgent(m.name, conn, running, log)
+
+		agent = newAgent(m.name, conn, running, log)
+
+		if this.agentStdin == false {
+			close(agent.Stdin())
+		}
+
+		this.acceptc <- agent
 		return
 	default:
 		log.Warn("unexpected message type: %T", log.Emph(2, msg))

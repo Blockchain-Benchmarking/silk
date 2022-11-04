@@ -53,8 +53,6 @@ func runCommand(route, name string, args []string, cwd string, log sio.Logger){
 	})
 
 	for agent = range job.Accept() {
-		close(agent.Stdin())
-
 		go sio.WriteFromChannel(os.Stdout, agent.Stdout())
 		go sio.WriteFromChannel(os.Stderr, agent.Stderr())
 
