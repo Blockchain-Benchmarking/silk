@@ -68,10 +68,15 @@ func NewServiceWith(opts *ServiceOptions) (Service, error) {
 
 
 type Message struct {
+	// Name of the executable to run.
+	// If empty then wait to receive client executable.
 	name string
 
+	// Arguments to give to the process.
 	args []string
 
+	// If not empty then indicate a directory to set as cwd for the process
+	// to run.
 	cwd string
 }
 
