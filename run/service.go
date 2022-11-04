@@ -178,6 +178,7 @@ func newServiceProcess(parent *service, req *Message, conn net.Connection, log s
 func (this *serviceProcess) run() {
 	var sending sync.WaitGroup
 	var proc Process
+	var name string
 	var err error
 
 	this.log.Trace("send service name: %s",
@@ -187,9 +188,24 @@ func (this *serviceProcess) run() {
 		P: protocol,
 	}
 
+	if this.req.name == "" {
+		this.log.Trace("receive client executable")
+		err = this.receiveExecutable()
+		if err != nil {
+			this.log.Warn("%s", err.Error())
+			return
+		}
+
+		name = this.tempExec.Name()
+
+		defer os.Remove(name)
+	} else {
+		name = this.req.name
+	}
+
 	sending.Add(2)  // stdout + stderr
 
-	proc, err = NewProcessWith(this.req.name,this.req.args,&ProcessOptions{
+	proc, err = NewProcessWith(name, this.req.args, &ProcessOptions{
 		Log: this.log,
 
 		Cwd: this.req.cwd,
