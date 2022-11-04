@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	sio "silk/io"
@@ -41,14 +42,32 @@ type runConfig struct {
 	name string
 	args []string
 	cwd ui.OptionString
+	localCommand ui.OptionBool
 }
 
 
 func doRun(config *runConfig) {
+	var localExec io.ReadCloser
 	var resolver net.Resolver
+	var transmitStdin bool
 	var route net.Route
 	var agent run.Agent
 	var job run.Job
+	var err error
+
+	transmitStdin = true
+
+	if config.localCommand.Value() {
+		if config.name == "-" {
+			localExec = os.Stdin
+			transmitStdin = false
+		} else {
+			localExec, err = os.Open(config.name)
+			if err != nil {
+				fatale(err)
+			}
+		}
+	}
 
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
 		protocol, &net.TcpResolverOptions{
@@ -59,10 +78,11 @@ func doRun(config *runConfig) {
 	job = run.NewJobWith(config.name, config.args, route, protocol,
 		&run.JobOptions{
 			Cwd: config.cwd.Value(),
+			LocalExec: localExec,
 			Log: config.log.WithLocalContext("job[%s]",
 				config.name),
 			Signal: true,
-			Stdin: true,
+			Stdin: transmitStdin,
 		})
 
 	signal.Notify(job.Signal(), os.Interrupt)
@@ -79,7 +99,9 @@ func doRun(config *runConfig) {
 		}(agent)
 	}
 
-	go sio.ReadInChannel(os.Stdin, job.Stdin())
+	if transmitStdin {
+		go sio.ReadInChannel(os.Stdin, job.Stdin())
+	}
 
 	<-job.Wait()
 	close(job.Signal())
@@ -92,6 +114,7 @@ func doRun(config *runConfig) {
 func runMain(cli ui.Cli, verbose *verbosity) {
 	var config runConfig = runConfig{
 		cwd: ui.OptString{}.New(),
+		localCommand: ui.OptBool{}.New(),
 	}
 	var helpOption ui.Option = ui.OptCall{
 		WithoutArg: func () error { runUsage() ; return nil },
@@ -102,6 +125,7 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 	cli.AddOption('C', "cwd", config.cwd)
 	cli.DelOption('h', "help")
 	cli.AddOption('h', "help", helpOption)
+	cli.AddOption('L', "local-command", config.localCommand)
 
 	err = cli.Parse()
 	if err != nil {
