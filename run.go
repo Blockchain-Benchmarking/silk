@@ -15,6 +15,9 @@ import (
 )
 
 
+const SILK_CWD_NAME = "SILK_CWD"
+
+
 // ----------------------------------------------------------------------------
 
 
@@ -25,11 +28,16 @@ Usage: %s run [-C<path>] [-e<str>] [-L] [-o<str>] <route> <cmd>
 
 Run a command on remote server.
 The <route> indicate on what remote server to run the command.
+If the %s environment variable is set then set the current directory to
+its value on the remote server before to run the command.
 
 Options:
 
-  -C<path>, --cwd=<path>      Change current directory to the given <path>
-                              before to run the command.
+  -C<path>, --cwd=<path>      Change current directory before to run the
+                              command. If <path> starts with '/' then the
+                              current directory is set to <path>. Otherwise the
+                              current directory is the concatenation of the
+                              %s environment variable and <path>.
 
   -e<str>, --stderr=<str>     Print the standard error of the remote processes
                               accordingly to the given <str> specification.
@@ -63,7 +71,7 @@ Printing:
                               format string where '%%n' is interpreted as the
                               remote server name.
 
-`, os.Args[0])
+`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME)
 
 	os.Exit(0)
 }
@@ -94,6 +102,7 @@ func doRun(config *runConfig) {
 	var route net.Route
 	var agent run.Agent
 	var job run.Job
+	var cwd string
 	var err error
 	var i int
 
@@ -111,6 +120,17 @@ func doRun(config *runConfig) {
 		}
 	}
 
+	if strings.HasPrefix(config.cwd.Value(), "/") {
+		cwd = config.cwd.Value()
+	} else {
+		cwd = os.Getenv(SILK_CWD_NAME)
+		if (cwd != "") && (config.cwd.Value() != "") {
+			cwd = cwd + "/" + config.cwd.Value()
+		} else {
+			cwd = cwd + config.cwd.Value()
+		}
+	}
+
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
 		protocol, &net.TcpResolverOptions{
 			Log: config.log.WithLocalContext("resolve"),
@@ -119,7 +139,7 @@ func doRun(config *runConfig) {
 
 	job = run.NewJobWith(config.name, config.args, route, protocol,
 		&run.JobOptions{
-			Cwd: config.cwd.Value(),
+			Cwd: cwd,
 			LocalExec: localExec,
 			Log: config.log.WithLocalContext("job[%s]",
 				config.name),
