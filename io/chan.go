@@ -2,6 +2,7 @@ package io
 
 
 import (
+	"bytes"
 	"io"
 )
 
@@ -73,6 +74,51 @@ func NewWriterChannel(writer io.Writer) chan<- []byte {
 	go WriteFromChannel(writer, c)
 
 	return c
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func ParseLinesFromChannel(c <-chan []byte) <-chan string {
+	var d chan string = make(chan string)
+
+	go func () {
+		var buf bytes.Buffer
+		var err error
+		var b []byte
+		var s string
+
+		for b = range c {
+			buf.Write(b)
+
+			for {
+				s, err = buf.ReadString('\n')
+				if err != nil {
+					buf.WriteString(s)
+					break
+				}
+
+				d <- s
+			}
+		}
+
+		for {
+			s, err = buf.ReadString('\n')
+
+			if s != "" {
+				d <- s
+			}
+
+			if err != nil {
+				break
+			}
+		}
+
+		close(d)
+	}()
+
+	return d
 }
 
 
