@@ -51,18 +51,23 @@ type runConfig struct {
 	args []string
 	cwd ui.OptionString
 	localCommand ui.OptionBool
+	stderr *printerOption
+	stdout *printerOption
 }
 
 
 func doRun(config *runConfig) {
+	var stderrPrinters, stdoutPrinters []printer
 	var printing sync.WaitGroup
 	var localExec io.ReadCloser
 	var resolver net.Resolver
 	var transmitStdin bool
+	var agents []run.Agent
 	var route net.Route
 	var agent run.Agent
 	var job run.Job
 	var err error
+	var i int
 
 	transmitStdin = true
 
@@ -100,17 +105,7 @@ func doRun(config *runConfig) {
 		config.log.Debug("accept agent %s",
 			config.log.Emph(0, agent.Name()))
 
-		printing.Add(2)
-
-		go func (agent run.Agent) {
-			sio.WriteFromChannel(os.Stdout, agent.Stdout())
-			printing.Done()
-		}(agent)
-
-		go func (agent run.Agent) {
-			sio.WriteFromChannel(os.Stderr, agent.Stderr())
-			printing.Done()
-		}(agent)
+		agents = append(agents, agent)
 
 		go func (agent run.Agent) {
 			<-agent.Wait()
@@ -118,6 +113,23 @@ func doRun(config *runConfig) {
 				config.log.Emph(0, agent.Name()),
 				config.log.Emph(1, agent.Exit()))
 		}(agent)
+	}
+
+	stdoutPrinters = config.stdout.value().instances(agents, config.log)
+	stderrPrinters = config.stderr.value().instances(agents, config.log)
+
+	for i, agent = range agents {
+		printing.Add(2)
+
+		go func (index int, agent run.Agent) {
+			stdoutPrinters[index].printChannel(agent.Stdout())
+			printing.Done()
+		}(i, agent)
+
+		go func (index int, agent run.Agent) {
+			stderrPrinters[i].printChannel(agent.Stderr())
+			printing.Done()
+		}(i, agent)
 	}
 
 	if transmitStdin {
@@ -428,6 +440,8 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 	var config runConfig = runConfig{
 		cwd: ui.OptString{}.New(),
 		localCommand: ui.OptBool{}.New(),
+		stderr: newPrinterOption(os.Stderr),
+		stdout: newPrinterOption(os.Stdout),
 	}
 	var helpOption ui.Option = ui.OptCall{
 		WithoutArg: func () error { runUsage() ; return nil },
@@ -436,9 +450,11 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 	var ok bool
 
 	cli.AddOption('C', "cwd", config.cwd)
+	cli.AddOption('e', "stderr", config.stderr)
 	cli.DelOption('h', "help")
 	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('L', "local-command", config.localCommand)
+	cli.AddOption('o', "stdout", config.stdout)
 
 	err = cli.Parse()
 	if err != nil {
