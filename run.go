@@ -122,6 +122,26 @@ type printerType interface {
 	instances(agents []run.Agent, log sio.Logger) []printer
 }
 
+func parsePrinterType(spec string, base io.Writer) (printerType, error) {
+	if spec == "raw" {
+		return newRawPrinterType(base), nil
+	}
+
+	if spec == "prefix" {
+		spec = "prefix=%n "
+	}
+
+	if strings.HasPrefix(spec, "prefix=") {
+		return newPrefixPrinterType(base, spec[len("prefix="):]), nil
+	}
+
+	if strings.HasPrefix(spec, "file=") {
+		return newFilePrinterType(spec[len("file="):]), nil
+	}
+
+	return nil, &invalidPrinterType{ spec }
+}
+
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 type defaultPrinterType struct {
@@ -324,6 +344,65 @@ func (this *filePrinter) printChannel(c <-chan []byte) {
 
 func formatAgent(format string, agent run.Agent) string {
 	return strings.ReplaceAll(format, "%n", agent.Name())
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type printerOption struct {
+	base io.WriteCloser
+	inner ui.OptionString
+	ptype printerType
+}
+
+func newPrinterOption(base io.WriteCloser) *printerOption {
+	var this printerOption
+
+	this.base = base
+	this.inner = ui.OptString{}.New()
+	this.ptype = newDefaultPrinterType(this.base)
+
+	return &this
+}
+
+func (this *printerOption) Assignments() []ui.OptionAssignment {
+	return this.inner.Assignments()
+}
+
+func (this *printerOption) AssignValue(v string, st ui.ParsingState) error {
+	var ptype printerType
+	var err error
+
+	ptype, err = parsePrinterType(v, this.base)
+	if err != nil {
+		return err
+	}
+
+	err = this.inner.AssignValue(v, st)
+	if err != nil {
+		return err
+	}
+
+	this.ptype = ptype
+
+	return nil
+}
+
+func (this *printerOption) value() printerType {
+	return this.ptype
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type invalidPrinterType struct {
+	spec string
+}
+
+func (this *invalidPrinterType) Error() string {
+	return fmt.Sprintf("invalid printing: '%s'", this.spec)
 }
 
 
