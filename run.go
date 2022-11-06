@@ -97,6 +97,9 @@ func doRun(config *runConfig) {
 	signal.Notify(job.Signal(), os.Interrupt)
 
 	for agent = range job.Accept() {
+		config.log.Debug("accept agent %s",
+			config.log.Emph(0, agent.Name()))
+
 		printing.Add(2)
 
 		go func (agent run.Agent) {
@@ -111,7 +114,7 @@ func doRun(config *runConfig) {
 
 		go func (agent run.Agent) {
 			<-agent.Wait()
-			config.log.Info("agent %s exits with %d",
+			config.log.Debug("agent %s exits with %d",
 				config.log.Emph(0, agent.Name()),
 				config.log.Emph(1, agent.Exit()))
 		}(agent)
