@@ -122,6 +122,29 @@ type printerType interface {
 	instances(agents []run.Agent, log sio.Logger) []printer
 }
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type defaultPrinterType struct {
+	base io.Writer
+}
+
+func newDefaultPrinterType(base io.Writer) *defaultPrinterType {
+	var this defaultPrinterType
+
+	this.base = base
+
+	return &this
+}
+
+func (this *defaultPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
+	if len(agents) <= 1 {
+		return newRawPrinterType(this.base).
+			instances(agents, log)
+	} else {
+		return newPrefixPrinterType(this.base, "%n :: ").
+			instances(agents, log)
+	}
+}
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
