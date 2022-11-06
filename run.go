@@ -122,11 +122,56 @@ type printerType interface {
 }
 
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type rawPrinterType struct {
+	base io.Writer
+}
+
+func newRawPrinterType(base io.Writer) *rawPrinterType {
+	var this rawPrinterType
+
+	this.base = base
+
+	return &this
+}
+
+func (this *rawPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
+	var p printer = newRawPrinter(this.base)
+	var ret []printer = make([]printer, len(agents))
+	var i int
+
+	for i = range ret {
+		ret[i] = p
+	}
+
+	return ret
+}
+
+
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
 type printer interface {
 	printChannel(c <-chan []byte)
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type rawPrinter struct {
+	dest io.Writer
+}
+
+func newRawPrinter(dest io.Writer) *rawPrinter {
+	var this rawPrinter
+
+	this.dest = dest
+
+	return &this
+}
+
+func (this *rawPrinter) printChannel(c <-chan []byte) {
+	sio.WriteFromChannel(this.dest, c)
 }
 
 
