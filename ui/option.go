@@ -187,7 +187,7 @@ func (this OptString) New() OptionString {
 }
 
 type OptionString interface {
-	Option
+	OptionUnary
 
 	Value() string
 }
