@@ -2,6 +2,7 @@ package ui
 
 
 import (
+	"fmt"
 	"strconv"
 )
 
@@ -172,6 +173,10 @@ type OptString struct {
 	//
 	DefaultValue string
 
+	// Indicate if the option can be supplied more than once.
+	//
+	MultiAssignable bool
+
 	// Test if a provided value is valid.
 	// If not, return an `error` indicating why the value is invalid.
 	//
@@ -190,6 +195,15 @@ type OptionString interface {
 	OptionUnary
 
 	Value() string
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type OptionAssignedTwiceError struct {
+	First ParsingState
+	Second ParsingState
 }
 
 
@@ -472,6 +486,7 @@ func (this *optionIntVariadic) AssignValue(v string, s ParsingState) error {
 
 type optionStringBase struct {
 	optionBase
+	multiAssignable bool
 	value string
 	validityPredicate func (string) error
 }
@@ -479,6 +494,7 @@ type optionStringBase struct {
 func (this *optionStringBase) init(params *OptString) {
 	this.optionBase.init()
 
+	this.multiAssignable = params.MultiAssignable
 	this.value = params.DefaultValue
 
 	if params.ValidityPredicate == nil {
@@ -490,6 +506,13 @@ func (this *optionStringBase) init(params *OptString) {
 
 func (this *optionStringBase) assign(v string, state ParsingState) error {
 	var err error
+
+	if (this.multiAssignable == false) && (len(this.Assignments()) > 0) {
+		return &OptionAssignedTwiceError{
+			First: this.Assignments()[0].State(),
+			Second: state,
+		}
+	}
 
 	err = this.validityPredicate(v)
 	if err != nil {
@@ -556,4 +579,22 @@ func (this *optionStringVariadic) Assign(s ParsingState) error {
 
 func (this *optionStringVariadic) AssignValue(v string, s ParsingState) error {
 	return this.optionStringBase.assign(v, s)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func (this *OptionAssignedTwiceError) Error() string {
+	var fargs, sargs []string
+	var fow, sow, sf, se int
+
+	fargs = this.First.Arguments()
+	fow = this.First.OptionWord()
+	sargs = this.Second.Arguments()
+	sow = this.Second.OptionWord()
+	sf, se = this.Second.OptionRunes()
+
+	return fmt.Sprintf("option '%s' assigned twice in '%s' and '%s'",
+		string([]rune(sargs[sow])[sf:se]), fargs[fow], sargs[sow])
 }
