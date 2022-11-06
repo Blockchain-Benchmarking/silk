@@ -11,6 +11,7 @@ import (
 	"silk/run"
 	"silk/ui"
 	"strings"
+	"sync"
 )
 
 
@@ -54,6 +55,7 @@ type runConfig struct {
 
 
 func doRun(config *runConfig) {
+	var printing sync.WaitGroup
 	var localExec io.ReadCloser
 	var resolver net.Resolver
 	var transmitStdin bool
@@ -95,8 +97,17 @@ func doRun(config *runConfig) {
 	signal.Notify(job.Signal(), os.Interrupt)
 
 	for agent = range job.Accept() {
-		go sio.WriteFromChannel(os.Stdout, agent.Stdout())
-		go sio.WriteFromChannel(os.Stderr, agent.Stderr())
+		printing.Add(2)
+
+		go func (agent run.Agent) {
+			sio.WriteFromChannel(os.Stdout, agent.Stdout())
+			printing.Done()
+		}(agent)
+
+		go func (agent run.Agent) {
+			sio.WriteFromChannel(os.Stderr, agent.Stderr())
+			printing.Done()
+		}(agent)
 
 		go func (agent run.Agent) {
 			<-agent.Wait()
@@ -112,6 +123,8 @@ func doRun(config *runConfig) {
 
 	<-job.Wait()
 	close(job.Signal())
+
+	printing.Wait()
 }
 
 
