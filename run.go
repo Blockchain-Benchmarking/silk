@@ -188,6 +188,18 @@ type printer interface {
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
+type nopPrinter struct {
+}
+
+func newNopPrinter() *nopPrinter {
+	return &nopPrinter{}
+}
+
+func (this *nopPrinter) printChannel(<-chan []byte) {
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
 type rawPrinter struct {
 	dest io.Writer
 }
