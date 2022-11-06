@@ -178,6 +178,42 @@ func (this *prefixPrinterType) instances(agents []run.Agent, log sio.Logger) []p
 	return ret
 }
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type filePrinterType struct {
+	format string
+}
+
+func newFilePrinterType(format string) *filePrinterType {
+	var this filePrinterType
+
+	this.format = format
+
+	return &this
+}
+
+func (this *filePrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
+	var ret []printer = make([]printer, len(agents))
+	var file *os.File
+	var path string
+	var err error
+	var i int
+
+	for i = range ret {
+		path = formatAgent(this.format, agents[i])
+		file, err = os.Create(path)
+		if err != nil {
+			log.Warn("cannot create file %s: %s",
+				log.Emph(0, path), err.Error())
+			ret[i] = newNopPrinter()
+		} else {
+			ret[i] = newFilePrinter(file)
+		}
+	}
+
+	return ret
+}
+
 
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -238,6 +274,25 @@ func (this *prefixPrinter) printChannel(c <-chan []byte) {
 	for s = range sio.ParseLinesFromChannel(c) {
 		io.WriteString(this.dest, this.prefix + s)
 	}
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type filePrinter struct {
+	dest *os.File
+}
+
+func newFilePrinter(dest *os.File) *filePrinter {
+	var this filePrinter
+
+	this.dest = dest
+
+	return &this
+}
+
+func (this *filePrinter) printChannel(c <-chan []byte) {
+	sio.WriteFromChannel(this.dest, c)
+	this.dest.Close()
 }
 
 
