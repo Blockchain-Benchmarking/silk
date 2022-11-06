@@ -219,10 +219,10 @@ func main() {
 	switch command {
 	case "run":
 		runMain(cli, verbose)
-	case "server":
-		serverMain(cli, verbose)
 	case "send":
 		sendMain(cli, verbose)
+	case "server":
+		serverMain(cli, verbose)
 	default:
 		fatal("unknown command operand '%s'", command)
 	}
