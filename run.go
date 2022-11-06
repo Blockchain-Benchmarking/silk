@@ -10,6 +10,7 @@ import (
 	"silk/net"
 	"silk/run"
 	"silk/ui"
+	"strings"
 )
 
 
@@ -148,6 +149,35 @@ func (this *rawPrinterType) instances(agents []run.Agent, log sio.Logger) []prin
 	return ret
 }
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type prefixPrinterType struct {
+	base io.Writer
+	format string
+}
+
+func newPrefixPrinterType(base io.Writer, format string) *prefixPrinterType {
+	var this prefixPrinterType
+
+	this.base = base
+	this.format = format
+
+	return &this
+}
+
+func (this *prefixPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
+	var ret []printer = make([]printer, len(agents))
+	var prefix string
+	var i int
+
+	for i = range ret {
+		prefix = formatAgent(this.format, agents[i])
+		ret[i] = newPrefixPrinter(this.base, prefix)
+	}
+
+	return ret
+}
+
 
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -172,6 +202,38 @@ func newRawPrinter(dest io.Writer) *rawPrinter {
 
 func (this *rawPrinter) printChannel(c <-chan []byte) {
 	sio.WriteFromChannel(this.dest, c)
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type prefixPrinter struct {
+	dest io.Writer
+	prefix string
+}
+
+func newPrefixPrinter(dest io.Writer, prefix string) *prefixPrinter {
+	var this prefixPrinter
+
+	this.dest = dest
+	this.prefix = prefix
+
+	return &this
+}
+
+func (this *prefixPrinter) printChannel(c <-chan []byte) {
+	var s string
+
+	for s = range sio.ParseLinesFromChannel(c) {
+		io.WriteString(this.dest, this.prefix + s)
+	}
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func formatAgent(format string, agent run.Agent) string {
+	return strings.ReplaceAll(format, "%n", agent.Name())
 }
 
 
