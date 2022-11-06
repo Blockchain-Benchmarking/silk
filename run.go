@@ -19,7 +19,8 @@ import (
 
 
 func runUsage() {
-	fmt.Printf(`Usage: %s run [-C<path> | --cwd=<path>] [-L | --local-command] <route> <cmd>
+	fmt.Printf(`
+Usage: %s run [-C<path>] [-e<str>] [-L] [-o<str>] <route> <cmd>
          [<args>]
 
 Run a command on remote server.
@@ -30,10 +31,37 @@ Options:
   -C<path>, --cwd=<path>      Change current directory to the given <path>
                               before to run the command.
 
+  -e<str>, --stderr=<str>     Print the standard error of the remote processes
+                              accordingly to the given <str> specification.
+                              See (Printing) section.
+
   -L, --local-command         Interpret <cmd> as a local file to be sent to
                               the remote server and to be executed.
                               If <cmd> is '-' then read the file to be executed
                               on the standard input.
+
+  -o<str>, --stdout=<str>     Print the standard output of the remote processes
+                              accordingly to the given <str> specification.
+                              See (Printing) section.
+
+
+Printing:
+
+  raw                         Print the streams as they are on their
+                              corresponding local stream (stdout or stderr).
+                              This is the default when there is a single remote
+                              process
+
+  prefix[=<fmt>]              Prefix each line by the given <fmt> format string
+                              where '%%n' is interpreted as the remote server
+                              name. If not specified, <fmt> is '%%n :: '. This
+                              is the default when there are more than one
+                              remote process.
+
+  file=<fmt>                  Print the stream of each remote process in a
+                              dedicated file whose path is given by the <fmt>
+                              format string where '%%n' is interpreted as the
+                              remote server name.
 
 `, os.Args[0])
 
