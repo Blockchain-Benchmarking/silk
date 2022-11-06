@@ -117,6 +117,22 @@ func doRun(config *runConfig) {
 // ----------------------------------------------------------------------------
 
 
+type printerType interface {
+	instances(agents []run.Agent, log sio.Logger) []printer
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type printer interface {
+	printChannel(c <-chan []byte)
+}
+
+
+// ----------------------------------------------------------------------------
+
+
 func runMain(cli ui.Cli, verbose *verbosity) {
 	var config runConfig = runConfig{
 		cwd: ui.OptString{}.New(),
