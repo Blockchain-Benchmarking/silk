@@ -122,7 +122,6 @@ func doRun(config *runConfig) {
 	}
 
 	<-job.Wait()
-	close(job.Signal())
 
 	printing.Wait()
 }
