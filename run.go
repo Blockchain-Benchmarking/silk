@@ -516,7 +516,11 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 
 	config.name, ok = cli.SkipWord()
 	if ok == false {
-		fatal("missing cmd operand")
+		if config.localCommand.Value() {
+			config.name = "-"
+		} else {
+			fatal("missing cmd operand")
+		}
 	}
 
 	config.args = cli.Arguments()[cli.Parsed():]
