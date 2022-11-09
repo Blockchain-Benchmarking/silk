@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+#   Issue #2 - Wrong prefix
+#
+
+
+silk server --tcp=3200 --name='a' &
+pida=$!
+
+silk server --tcp=3201 --name='b' &
+pidb=$!
+
+
+dir="$(mktemp -d --suffix='.d' 'test.XXXXXX')"
+
+atexit() {
+    rm -rf "${dir}"
+    kill ${pida}
+    kill ${pidb}
+}
+
+trap atexit 'EXIT'
+
+
+printf '#!/bin/bash\necho ok >&2\n' \
+    | silk run -L '(localhost:3200|localhost:3201)' - \
+    2> "${dir}/observed"
+
+cat > "${dir}/expected" <<EOF
+a :: ok
+b :: ok
+EOF
+
+sort "${dir}/observed" > "${dir}/sorted"
+
+diff -Naur "${dir}/sorted" "${dir}/expected"
