@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	sio "silk/io"
 	"strings"
+	"syscall"
 )
 
 
@@ -16,7 +17,7 @@ import (
 type Process interface {
 	Exit() uint8
 
-	Kill(os.Signal)
+	Kill(syscall.Signal)
 
 	Stdin(data []byte) error
 
@@ -170,9 +171,9 @@ func (this *process) run() error {
 	return nil
 }
 
-func (this *process) Kill(sig os.Signal) {
-	this.log.Trace("send signal %s", this.log.Emph(1, sig.String()))
-	this.inner.Process.Signal(sig)
+func (this *process) Kill(sig syscall.Signal) {
+	this.log.Trace("send signal %d", this.log.Emph(1, sig))
+	syscall.Kill(this.inner.Process.Pid, sig)
 }
 
 func (this *process) Stdin(data []byte) error {

@@ -316,8 +316,8 @@ func (this *serviceProcess) receiveExecutable() error {
 
 func (this *serviceProcess) transmit(proc Process) {
 	var stdinBcast, stdinUcast bool
+	var sig syscall.Signal
 	var msg net.Message
-	var sig os.Signal
 	var err error
 
 	stdinBcast = true
@@ -614,7 +614,7 @@ func (this *jobSignal) Decode(source sio.Source) error {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-func signalCode(sig os.Signal) (uint8, error) {
+func signalCode(sig syscall.Signal) (uint8, error) {
 	switch sig {
 	case syscall.SIGABRT:   return  0, nil
 	case syscall.SIGALRM:   return  1, nil
@@ -649,7 +649,7 @@ func signalCode(sig os.Signal) (uint8, error) {
 	}
 }
 
-func codeSignal(scode uint8) (os.Signal, error) {
+func codeSignal(scode uint8) (syscall.Signal, error) {
 	switch scode {
 	case  0: return syscall.SIGABRT,   nil
 	case  1: return syscall.SIGALRM,   nil
@@ -680,7 +680,7 @@ func codeSignal(scode uint8) (os.Signal, error) {
 	case 26: return syscall.SIGWINCH,  nil
 	case 27: return syscall.SIGXCPU,   nil
 	case 28: return syscall.SIGXFSZ,   nil
-	default: return nil, &JobUnknownSignalCodeError{ scode }
+	default: return 0, &JobUnknownSignalCodeError{ scode }
 	}
 }
 
