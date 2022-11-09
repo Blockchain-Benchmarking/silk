@@ -175,7 +175,7 @@ func doRun(config *runConfig) {
 		}(i, agent)
 
 		go func (index int, agent run.Agent) {
-			stderrPrinters[i].printChannel(agent.Stderr())
+			stderrPrinters[index].printChannel(agent.Stderr())
 			printing.Done()
 		}(i, agent)
 	}
