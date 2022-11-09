@@ -7,6 +7,7 @@ import (
 	"silk/net"
 	"sync"
 	"sync/atomic"
+	"syscall"
 )
 
 
@@ -172,7 +173,7 @@ func (this *agent) transmitSignal(using *sync.WaitGroup) {
 	var err error
 
 	for s = range this.signalc {
-		scode, err = signalCode(s)
+		scode, err = signalCode(s.(syscall.Signal))
 		if err != nil {
 			this.log.Warn("%s", err.Error())
 			continue

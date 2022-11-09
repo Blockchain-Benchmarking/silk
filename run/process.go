@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	sio "silk/io"
 	"strings"
+	"syscall"
 )
 
 
@@ -16,7 +17,7 @@ import (
 type Process interface {
 	Exit() uint8
 
-	Kill(os.Signal)
+	Kill(syscall.Signal)
 
 	Stdin(data []byte) error
 
@@ -85,6 +86,8 @@ type ProcessOptions struct {
 
 	Cwd string
 
+	Setpgid bool
+
 	Stdout func ([]byte) error
 
 	Stderr func ([]byte) error
@@ -137,9 +140,11 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 		return nil, err
 	}
 
+	this.inner.Dir = opts.Cwd
+	this.inner.SysProcAttr = &syscall.SysProcAttr{ Setpgid: opts.Setpgid }
+
 	this.log = opts.Log
 	this.logStdin = this.log.WithLocalContext("stdin")
-	this.inner.Dir = opts.Cwd
 	this.stdout = newProcessReader(stdout, opts.Stdout, opts.CloseStdout,
 		this.log.WithLocalContext("stdout"))
 	this.stderr = newProcessReader(stderr, opts.Stderr, opts.CloseStderr,
@@ -163,6 +168,9 @@ func (this *process) run() error {
 		return err
 	}
 
+	this.log.Debug("started as %d",
+		this.log.Emph(1, this.inner.Process.Pid),)
+
 	go this.stdout.transfer()
 	go this.stderr.transfer()
 	go this.waitTermination()
@@ -170,9 +178,11 @@ func (this *process) run() error {
 	return nil
 }
 
-func (this *process) Kill(sig os.Signal) {
-	this.log.Trace("send signal %s", this.log.Emph(1, sig.String()))
-	this.inner.Process.Signal(sig)
+func (this *process) Kill(sig syscall.Signal) {
+	this.log.Debug("send signal %d to %d",
+		this.log.Emph(1, sig),
+		this.log.Emph(1, -this.inner.Process.Pid))
+	syscall.Kill(-this.inner.Process.Pid, sig)
 }
 
 func (this *process) Stdin(data []byte) error {
