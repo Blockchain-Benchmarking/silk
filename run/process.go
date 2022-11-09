@@ -168,6 +168,9 @@ func (this *process) run() error {
 		return err
 	}
 
+	this.log.Debug("started as %d",
+		this.log.Emph(1, this.inner.Process.Pid),)
+
 	go this.stdout.transfer()
 	go this.stderr.transfer()
 	go this.waitTermination()
@@ -176,7 +179,9 @@ func (this *process) run() error {
 }
 
 func (this *process) Kill(sig syscall.Signal) {
-	this.log.Trace("send signal %d", this.log.Emph(1, sig))
+	this.log.Debug("send signal %d to %d",
+		this.log.Emph(1, sig),
+		this.log.Emph(1, -this.inner.Process.Pid))
 	syscall.Kill(-this.inner.Process.Pid, sig)
 }
 
