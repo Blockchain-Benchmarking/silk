@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	sio "silk/io"
 	"silk/net"
 	"silk/run"
 	"silk/ui"
+	"syscall"
 )
 
 
@@ -77,6 +79,20 @@ func serve(a net.Accepter, aggregation net.AggregationService, routing net.Routi
 	}
 }
 
+func setupSigmask(log sio.Logger) {
+	var ignorec chan os.Signal = make(chan os.Signal, 1)
+
+	signal.Notify(ignorec, syscall.SIGINT)
+
+	go func () {
+		var sig os.Signal
+
+		for sig = range ignorec {
+			log.Info("ignore signal %d", log.Emph(1, sig))
+		}
+	}()
+}
+
 func serverStart(port int, name string, log sio.Logger) {
 	var aggregationService net.AggregationService
 	var routingService net.RoutingService
@@ -110,6 +126,8 @@ func serverStart(port int, name string, log sio.Logger) {
 	if err != nil {
 		fatale(err)
 	}
+
+	setupSigmask(log)
 
 	log.Info("start")
 
