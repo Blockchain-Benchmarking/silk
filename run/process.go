@@ -86,6 +86,8 @@ type ProcessOptions struct {
 
 	Cwd string
 
+	Setpgid bool
+
 	Stdout func ([]byte) error
 
 	Stderr func ([]byte) error
@@ -138,9 +140,11 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 		return nil, err
 	}
 
+	this.inner.Dir = opts.Cwd
+	this.inner.SysProcAttr = &syscall.SysProcAttr{ Setpgid: opts.Setpgid }
+
 	this.log = opts.Log
 	this.logStdin = this.log.WithLocalContext("stdin")
-	this.inner.Dir = opts.Cwd
 	this.stdout = newProcessReader(stdout, opts.Stdout, opts.CloseStdout,
 		this.log.WithLocalContext("stdout"))
 	this.stderr = newProcessReader(stderr, opts.Stderr, opts.CloseStderr,
@@ -173,7 +177,7 @@ func (this *process) run() error {
 
 func (this *process) Kill(sig syscall.Signal) {
 	this.log.Trace("send signal %d", this.log.Emph(1, sig))
-	syscall.Kill(this.inner.Process.Pid, sig)
+	syscall.Kill(-this.inner.Process.Pid, sig)
 }
 
 func (this *process) Stdin(data []byte) error {

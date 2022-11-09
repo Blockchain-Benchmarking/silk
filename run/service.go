@@ -215,6 +215,8 @@ func (this *serviceProcess) run() {
 
 		Cwd: this.req.cwd,
 
+		Setpgid: true,
+
 		Stdout: func (b []byte) error {
 			this.conn.Send() <- net.MessageProtocol{
 				M: &jobStdoutData{ b },
