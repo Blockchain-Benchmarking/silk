@@ -79,7 +79,7 @@ func serve(a net.Accepter, aggregation net.AggregationService, routing net.Routi
 	}
 }
 
-func setupSigmask(log sio.Logger) {
+func setupServerSigmask(log sio.Logger) {
 	var ignorec chan os.Signal = make(chan os.Signal, 1)
 
 	signal.Notify(ignorec, syscall.SIGINT)
@@ -127,7 +127,7 @@ func serverStart(port int, name string, log sio.Logger) {
 		fatale(err)
 	}
 
-	setupSigmask(log)
+	setupServerSigmask(log)
 
 	log.Info("start")
 
