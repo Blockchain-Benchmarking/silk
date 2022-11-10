@@ -102,7 +102,8 @@ type ProcessOptions struct {
 // ----------------------------------------------------------------------------
 
 
-const ioBufferSize = 1 << 16
+const maxIoBufferSize = 1 << 16
+const minIoBufferSize = 1 << 10
 
 
 type process struct {
@@ -263,11 +264,15 @@ func newProcessReader(pipe io.ReadCloser, writef func ([]byte) error, closef fun
 }
 
 func (this *processReader) transfer() {
-	var b []byte = make([]byte, ioBufferSize)
 	var readErr, callErr error
+	var b []byte
 	var n int
 
 	for {
+		if len(b) <= minIoBufferSize {
+			b = make([]byte, maxIoBufferSize)
+		}
+
 		n, readErr = this.pipe.Read(b)
 
 		if n > 0 {
@@ -282,6 +287,8 @@ func (this *processReader) transfer() {
 		if readErr != nil {
 			break
 		}
+
+		b = b[n:]
 	}
 
 	this.log.Trace("close")
