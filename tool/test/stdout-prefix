@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+#   Is the correct prefix prepended to stdout when running on more than one
+#   server?
+#
+
+
+silk server --tcp=3200 --name='a' &
+silk server --tcp=3201 --name='b' &
+
+silk run '(localhost:3200|localhost:3201)' echo 'ok' > "observed"
+
+sort "observed" > "sorted"
+
+cat > "expected" <<EOF
+a :: ok
+b :: ok
+EOF
+
+diff -Naur "sorted" "expected"
