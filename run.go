@@ -12,6 +12,7 @@ import (
 	"silk/ui"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 
@@ -92,6 +93,12 @@ type runConfig struct {
 }
 
 
+func setupRunSigmask() {
+	signal.Ignore(syscall.SIGTSTP)
+	signal.Ignore(syscall.SIGTTIN)
+	signal.Ignore(syscall.SIGTTOU)
+}
+
 func doRun(config *runConfig) {
 	var stderrPrinters, stdoutPrinters []printer
 	var printing sync.WaitGroup
@@ -130,6 +137,8 @@ func doRun(config *runConfig) {
 			cwd = cwd + config.cwd.Value()
 		}
 	}
+
+	setupRunSigmask()
 
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
 		protocol, &net.TcpResolverOptions{
