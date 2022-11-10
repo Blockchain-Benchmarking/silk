@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+#   Can a client send a directory to many remote servers?
+#
+
+
+mkdir 'src' 's0' 's1'
+
+( cd 's0' ; silk server --tcp=3200 ) &
+( cd 's1' ; silk server --tcp=3201 ) &
+
+mkdir 'src/dir'
+echo 'foo' > 'src/dir/file-0'
+echo 'bar' > 'src/dir/file-1'
+
+silk send -t '.' '(localhost:3200|localhost:3201)' 'src/dir'
+
+diff -Naur 's0/dir' 'src/dir' && \
+diff -Naur 's1/dir' 'src/dir'

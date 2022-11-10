@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+#   Can a client send many files to a remote server while specifying the target
+#   directory?
+#
+
+
+silk server --tcp=3200 &
+
+mkdir 'dest'
+mkdir 'src'
+echo 'foo' > 'src/file-0'
+echo 'bar' > 'src/file-1'
+echo 'quux' > 'src/file-2'
+
+silk send -t 'dest' 'localhost:3200' 'src/file-0' 'src/file-1' 'src/file-2'
+
+diff -Naur 'dest/file-0' 'src/file-0' && \
+diff -Naur 'dest/file-1' 'src/file-1' && \
+diff -Naur 'dest/file-2' 'src/file-2'

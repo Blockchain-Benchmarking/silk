@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+#   Can a user execute a local script remotely with arguments?
+#
+
+
+silk server --tcp=3200 &
+
+silk run -L 'localhost:3200' - 'a' 'b' 'c' > 'observed' <<EOF
+#!/bin/bash
+for arg in "\$@" ; do
+    echo \$arg
+done
+EOF
+
+cat > "expected" <<EOF
+a
+b
+c
+EOF
+
+diff -Naur "observed" "expected"

@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+#   Is the SIGINT transmitted to remote commands?
+#
+#   fix: issue #1
+#
+
+
+# Start a server.
+#
+silk server --tcp=3200 &
+server=$!
+
+
+# Start a remote job that:
+#   - creates a file 'go' -> signals the job has started
+#   - sleeps              -> waits to be killed
+#   - execute true        -> the shell does not exec sleep
+#
+printf "#!/bin/bash\ntouch 'go'\nsleep 60\ntrue\n" \
+    | silk run -L localhost:3200 - &
+client=$!
+
+
+# Wait for the remote command to start.
+#
+while ! [ -e 'go' ] ; do
+    sleep 0.01
+done
+
+
+# Send SIGINT to the client.
+#
+/usr/bin/kill -INT ${client}
+
+
+# Wait for the remote command to get signaled
+#
+sleep 0.1
+
+
+# Test if the process terminated correctly
+#
+! ps --no-headers ${client}

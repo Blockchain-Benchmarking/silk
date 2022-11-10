@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#   Can a client send a file to a remote server while specifying the target
+#   directory?
+#
+
+
+silk server --tcp=3200 &
+
+mkdir 'dest'
+mkdir 'src'
+echo 'foo' > 'src/file'
+
+silk send -t 'dest' 'localhost:3200' 'src/file'
+
+diff -Naur 'dest/file' 'src/file'

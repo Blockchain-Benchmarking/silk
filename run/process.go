@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	sio "silk/io"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -101,7 +102,8 @@ type ProcessOptions struct {
 // ----------------------------------------------------------------------------
 
 
-const ioBufferSize = 1 << 16
+const maxIoBufferSize = 1 << 16
+const minIoBufferSize = 1 << 10
 
 
 type process struct {
@@ -156,6 +158,7 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 }
 
 func (this *process) run() error {
+	var transferring sync.WaitGroup
 	var err error
 
 	this.log.Debug("start '%s': '%s'", this.log.Emph(0, this.inner.Path),
@@ -171,9 +174,22 @@ func (this *process) run() error {
 	this.log.Debug("started as %d",
 		this.log.Emph(1, this.inner.Process.Pid),)
 
-	go this.stdout.transfer()
-	go this.stderr.transfer()
-	go this.waitTermination()
+	transferring.Add(2)
+
+	go func () {
+		this.stdout.transfer()
+		transferring.Done()
+	}()
+
+	go func () {
+		this.stderr.transfer()
+		transferring.Done()
+	}()
+
+	go func () {
+		transferring.Wait()
+		this.waitTermination()
+	}()
 
 	return nil
 }
@@ -248,11 +264,15 @@ func newProcessReader(pipe io.ReadCloser, writef func ([]byte) error, closef fun
 }
 
 func (this *processReader) transfer() {
-	var b []byte = make([]byte, ioBufferSize)
 	var readErr, callErr error
+	var b []byte
 	var n int
 
 	for {
+		if len(b) <= minIoBufferSize {
+			b = make([]byte, maxIoBufferSize)
+		}
+
 		n, readErr = this.pipe.Read(b)
 
 		if n > 0 {
@@ -267,6 +287,8 @@ func (this *processReader) transfer() {
 		if readErr != nil {
 			break
 		}
+
+		b = b[n:]
 	}
 
 	this.log.Trace("close")
