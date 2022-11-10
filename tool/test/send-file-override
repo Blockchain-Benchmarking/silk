@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#   Can a client send a file to a remote server even if a directory wth the
+#   same name already exists?
+#
+
+
+silk server --tcp=3200 &
+
+mkdir 'dest' 'src'
+mkdir 'dest/file'
+echo 'foo' > 'src/file'
+
+silk send -t 'dest' 'localhost:3200' 'src/file'
+
+diff -Naur 'dest/file' 'src/file'
