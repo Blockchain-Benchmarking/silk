@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+#   Is a remote server able to modify its surrounding filesystem?
+#
+
+
+silk server --tcp=3200 &
+
+touch a b
+
+silk run 'localhost:3200' rm 'a'
+
+[ -e 'b' ] && [ ! -e 'a' ]
