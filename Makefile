@@ -35,8 +35,13 @@ install: $(BIN)silk
 	cp $< $(prefix)/bin/silk
 
 
-test:
+test: unit-test validation-test
+
+unit-test:
 	go test $(test_verbosity_options) -count=1 $(test_parameters)
+
+validation-test: $(BIN)silk
+	./tool/validate -p $(BIN)
 
 bench:
 	go test $(test_verbosity_options) -bench=. $(addprefix ./, $(T))
