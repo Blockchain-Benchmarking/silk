@@ -183,13 +183,13 @@ func TestRouteLongUnreachable(t *testing.T) {
 	var more bool
 	var r Route
 
-	p0 = findTcpPort(t)
-	p1 = findTcpPort(t)
-
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
+
+	p0 = findTcpPort(t)
 	serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
 
+	p1 = findTcpPort(t)
 	r = NewRoute([]string{
 		fmt.Sprintf("localhost:%d", p0),
 		fmt.Sprintf("localhost:%d", p1),
@@ -247,11 +247,12 @@ func TestRouteLong(t *testing.T) {
 		var p0, p1 uint16
 		var r Route
 
-		p0 = findTcpPort(t)
-		p1 = findTcpPort(t)
-
 		ctx, cancel = context.WithCancel(context.Background())
+
+		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+
+		p1 = findTcpPort(t)
 		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
 
 		r = NewRoute([]string{
@@ -280,11 +281,12 @@ func TestRouteForkInvalid(t *testing.T) {
 		var p0, p1 uint16
 		var r Route
 
-		p0 = findTcpPort(t)
-		p1 = findTcpPort(t)
-
 		ctx, cancel = context.WithCancel(context.Background())
+
+		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+
+		p1 = findTcpPort(t)
 		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
 
 		r = NewRoute([]string{
@@ -309,13 +311,15 @@ func TestRouteFork(t *testing.T) {
 		var p0, p1, p2 uint16
 		var r Route
 
-		p0 = findTcpPort(t)
-		p1 = findTcpPort(t)
-		p2 = findTcpPort(t)
-
 		ctx, cancel = context.WithCancel(context.Background())
+
+		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+
+		p1 = findTcpPort(t)
 		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
+
+		p2 = findTcpPort(t)
 		serveTerminal(ctx, fmt.Sprintf(":%d", p2), connc)
 
 		r = NewRoute([]string{
@@ -344,17 +348,21 @@ func TestRouteTree(t *testing.T) {
 		var ctx context.Context
 		var r Route
 
-		p0 = findTcpPort(t)
-		p1 = findTcpPort(t)
-		p2 = findTcpPort(t)
-		p3 = findTcpPort(t)
-		p4 = findTcpPort(t)
-
 		ctx, cancel = context.WithCancel(context.Background())
+
+		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+
+		p1 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p1), res)
+
+		p2 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p2), res)
+
+		p3 = findTcpPort(t)
 		serveTerminal(ctx, fmt.Sprintf(":%d", p3), connc)
+
+		p4 = findTcpPort(t)
 		serveTerminal(ctx, fmt.Sprintf(":%d", p4), connc)
 
 		r = NewRoute([]string{
