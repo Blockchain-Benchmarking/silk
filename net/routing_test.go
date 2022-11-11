@@ -35,13 +35,13 @@ func _routeConnections(a Accepter, rs RoutingService) {
 }
 
 func serveEndpoint(ctx context.Context, addr string, connc chan<- Connection) {
-	acceptConnections(NewTcpServerWith(addr, &TcpServerOptions{
+	go acceptConnections(NewTcpServerWith(addr, &TcpServerOptions{
 		Context: ctx,
 	}), connc)
 }
 
 func serveRelay(ctx context.Context, addr string, res Resolver) {
-	_routeConnections(NewTcpServerWith(addr, &TcpServerOptions{
+	go _routeConnections(NewTcpServerWith(addr, &TcpServerOptions{
 		Context: ctx,
 	}), NewRoutingService(res))
 }
@@ -51,7 +51,7 @@ func serveTerminal(ctx context.Context, addr string, connc chan<- Connection) {
 
 	go acceptConnections(rs, connc)
 
-	_routeConnections(NewTcpServerWith(addr, &TcpServerOptions{
+	go _routeConnections(NewTcpServerWith(addr, &TcpServerOptions{
 		Context: ctx,
 	}), rs)
 }
@@ -159,7 +159,7 @@ func TestRouteLongInvalid(t *testing.T) {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	go serveRelay(ctx, fmt.Sprintf(":%d", port), res)
+	serveRelay(ctx, fmt.Sprintf(":%d", port), res)
 
 	r = NewRoute([]string{
 		fmt.Sprintf("localhost:%d", port),
@@ -188,7 +188,7 @@ func TestRouteLongUnreachable(t *testing.T) {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	go serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+	serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
 
 	r = NewRoute([]string{
 		fmt.Sprintf("localhost:%d", p0),
@@ -221,7 +221,7 @@ func TestRouteLongUnresolvable(t *testing.T) {
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
-	go serveRelay(ctx, fmt.Sprintf(":%d", port), res)
+	serveRelay(ctx, fmt.Sprintf(":%d", port), res)
 
 	r = NewRoute([]string{
 		fmt.Sprintf("localhost:%d", port),
@@ -251,8 +251,8 @@ func TestRouteLong(t *testing.T) {
 		p1 = findTcpPort(t)
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
-		go serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
+		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
 
 		r = NewRoute([]string{
 			fmt.Sprintf("localhost:%d", p0),
@@ -284,8 +284,8 @@ func TestRouteForkInvalid(t *testing.T) {
 		p1 = findTcpPort(t)
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
-		go serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
+		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
 
 		r = NewRoute([]string{
 			fmt.Sprintf("localhost:%d", p0),
@@ -314,9 +314,9 @@ func TestRouteFork(t *testing.T) {
 		p2 = findTcpPort(t)
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
-		go serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
-		go serveTerminal(ctx, fmt.Sprintf(":%d", p2), connc)
+		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p2), connc)
 
 		r = NewRoute([]string{
 			fmt.Sprintf("localhost:%d", p0),
@@ -351,11 +351,11 @@ func TestRouteTree(t *testing.T) {
 		p4 = findTcpPort(t)
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
-		go serveRelay(ctx, fmt.Sprintf(":%d", p1), res)
-		go serveRelay(ctx, fmt.Sprintf(":%d", p2), res)
-		go serveTerminal(ctx, fmt.Sprintf(":%d", p3), connc)
-		go serveTerminal(ctx, fmt.Sprintf(":%d", p4), connc)
+		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
+		serveRelay(ctx, fmt.Sprintf(":%d", p1), res)
+		serveRelay(ctx, fmt.Sprintf(":%d", p2), res)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p3), connc)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p4), connc)
 
 		r = NewRoute([]string{
 			fmt.Sprintf("localhost:%d", p0),
