@@ -56,6 +56,10 @@ type JobOptions struct {
 	// Otherwise it executes it in the server cwd.
 	Cwd string
 
+	// Add or override the remote `Process` environment with the variables
+	// defined in this map.
+	Env map[string]string
+
 	// If not `nil` then ignore the `name` argument of `NewJobWith` and
 	// transfer what is `Read` from this parameter to the remote servers
 	// and execute it.
@@ -142,6 +146,7 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 
 	m.args = args
 	m.cwd = opts.Cwd
+	m.env = opts.Env
 
 	err = m.check()
 	if err != nil {
