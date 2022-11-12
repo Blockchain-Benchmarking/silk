@@ -173,10 +173,6 @@ type OptString struct {
 	//
 	DefaultValue string
 
-	// Indicate if the option can be supplied more than once.
-	//
-	MultiAssignable bool
-
 	// Test if a provided value is valid.
 	// If not, return an `error` indicating why the value is invalid.
 	//
@@ -195,6 +191,33 @@ type OptionString interface {
 	OptionUnary
 
 	Value() string
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type OptStringList struct {
+	// Test if a provided value is valid.
+	// If not, return an `error` indicating why the value is invalid.
+	//
+	ValidityPredicate func (string) error
+
+	// Indicate if the option can be supplied with no value.
+	// If so then nothing is appended to the slice returned by `Values()`
+	// but the `Assignments()` slice is still updated.
+	//
+	Variadic bool
+}
+
+func (this OptStringList) New() OptionStringList {
+	return newOptionStringList(&this)
+}
+
+type OptionStringList interface {
+	OptionUnary
+
+	Values() []string
 }
 
 
@@ -486,7 +509,6 @@ func (this *optionIntVariadic) AssignValue(v string, s ParsingState) error {
 
 type optionStringBase struct {
 	optionBase
-	multiAssignable bool
 	value string
 	validityPredicate func (string) error
 }
@@ -494,7 +516,6 @@ type optionStringBase struct {
 func (this *optionStringBase) init(params *OptString) {
 	this.optionBase.init()
 
-	this.multiAssignable = params.MultiAssignable
 	this.value = params.DefaultValue
 
 	if params.ValidityPredicate == nil {
@@ -507,7 +528,7 @@ func (this *optionStringBase) init(params *OptString) {
 func (this *optionStringBase) assign(v string, state ParsingState) error {
 	var err error
 
-	if (this.multiAssignable == false) && (len(this.Assignments()) > 0) {
+	if len(this.Assignments()) > 0 {
 		return &OptionAssignedTwiceError{
 			First: this.Assignments()[0].State(),
 			Second: state,
@@ -579,6 +600,98 @@ func (this *optionStringVariadic) Assign(s ParsingState) error {
 
 func (this *optionStringVariadic) AssignValue(v string, s ParsingState) error {
 	return this.optionStringBase.assign(v, s)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type optionStringListBase struct {
+	optionBase
+	values []string
+	validityPredicate func (string) error
+}
+
+func (this *optionStringListBase) init(params *OptStringList) {
+	this.optionBase.init()
+
+	this.values = make([]string, 0)
+
+	if params.ValidityPredicate == nil {
+		this.validityPredicate = func (string) error { return nil }
+	} else {
+		this.validityPredicate = params.ValidityPredicate
+	}
+}
+
+func (this *optionStringListBase) assign(v string, state ParsingState) error {
+	var err error
+
+	err = this.validityPredicate(v)
+	if err != nil {
+		return err
+	}
+
+	this.optionBase.assign(state)
+
+	this.values = append(this.values, v)
+
+	return nil
+}
+
+func (this *optionStringListBase) Values() []string {
+	return this.values
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func newOptionStringList(params *OptStringList) OptionStringList {
+	if params.Variadic {
+		return newOptionStringListVariadic(params)
+	} else {
+		return newOptionStringListUnary(params)
+	}
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type optionStringListUnary struct {
+	optionStringListBase
+}
+
+func newOptionStringListUnary(params *OptStringList) *optionStringListUnary {
+	var this optionStringListUnary
+
+	this.optionStringListBase.init(params)
+
+	return &this
+}
+
+func (this *optionStringListUnary) AssignValue(v string, s ParsingState) error{
+	return this.optionStringListBase.assign(v, s)
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type optionStringListVariadic struct {
+	optionStringListBase
+}
+
+func newOptionStringListVariadic(params *OptStringList) *optionStringListVariadic {
+	var this optionStringListVariadic
+
+	this.optionStringListBase.init(params)
+
+	return &this
+}
+
+func (this *optionStringListVariadic) Assign(s ParsingState) error {
+	this.optionBase.assign(s)
+	return nil
+}
+
+func (this *optionStringListVariadic) AssignValue(v string, s ParsingState) error {
+	return this.optionStringListBase.assign(v, s)
 }
 
 
