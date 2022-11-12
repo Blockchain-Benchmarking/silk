@@ -87,6 +87,7 @@ type runConfig struct {
 	name string
 	args []string
 	cwd ui.OptionString
+	env ui.OptionStringList
 	localCommand ui.OptionBool
 	stderr *printerOption
 	stdout *printerOption
@@ -104,12 +105,13 @@ func doRun(config *runConfig) {
 	var printing sync.WaitGroup
 	var localExec io.ReadCloser
 	var resolver net.Resolver
+	var env map[string]string
 	var transmitStdin bool
 	var agents []run.Agent
+	var cwd, keyval string
 	var route net.Route
 	var agent run.Agent
 	var job run.Job
-	var cwd string
 	var err error
 	var i int
 
@@ -138,6 +140,19 @@ func doRun(config *runConfig) {
 		}
 	}
 
+	if len(config.env.Values()) > 0 {
+		env = make(map[string]string)
+
+		for _, keyval = range config.env.Values() {
+			i = strings.Index(keyval, "=")
+			if i < 0 {
+				env[keyval] = ""
+			} else {
+				env[keyval[:i]] = keyval[i+1:]
+			}
+		}
+	}
+
 	setupRunSigmask()
 
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
@@ -149,6 +164,7 @@ func doRun(config *runConfig) {
 	job = run.NewJobWith(config.name, config.args, route, protocol,
 		&run.JobOptions{
 			Cwd: cwd,
+			Env: env,
 			LocalExec: localExec,
 			Log: config.log.WithLocalContext("job[%s]",
 				config.name),
@@ -496,6 +512,7 @@ func (this *invalidPrinterType) Error() string {
 func runMain(cli ui.Cli, verbose *verbosity) {
 	var config runConfig = runConfig{
 		cwd: ui.OptString{}.New(),
+		env: ui.OptStringList{}.New(),
 		localCommand: ui.OptBool{}.New(),
 		stderr: newPrinterOption(os.Stderr),
 		stdout: newPrinterOption(os.Stdout),
@@ -508,6 +525,7 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 
 	cli.AddOption('C', "cwd", config.cwd)
 	cli.AddOption('e', "stderr", config.stderr)
+	cli.AddOption('E', "env", config.env)
 	cli.DelOption('h', "help")
 	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('L', "local-command", config.localCommand)
