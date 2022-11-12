@@ -91,6 +91,7 @@ type runConfig struct {
 	localCommand ui.OptionBool
 	stderr *printerOption
 	stdout *printerOption
+	source ui.OptionStringList
 }
 
 
@@ -106,6 +107,7 @@ func doRun(config *runConfig) {
 	var localExec io.ReadCloser
 	var resolver net.Resolver
 	var env map[string]string
+	var shell run.ShellType
 	var transmitStdin bool
 	var agents []run.Agent
 	var cwd, keyval string
@@ -113,7 +115,7 @@ func doRun(config *runConfig) {
 	var agent run.Agent
 	var job run.Job
 	var err error
-	var i int
+	var i, n int
 
 	transmitStdin = true
 
@@ -153,6 +155,23 @@ func doRun(config *runConfig) {
 		}
 	}
 
+	n = len(config.source.Assignments())
+	if (os.Getenv(SILK_SHELL_NAME) == "") && (n == 0) {
+		shell = run.ShellNone
+	} else if os.Getenv(SILK_SHELL_NAME) != "" {
+		shell = &run.ShellLogin{
+			Sources: config.source.Values(),
+		}
+	} else if n > len(config.source.Values()) {
+		shell = &run.ShellLogin{
+			Sources: config.source.Values(),
+		}
+	} else {
+		shell = &run.ShellSimple{
+			Sources: config.source.Values(),
+		}
+	}
+
 	setupRunSigmask()
 
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
@@ -165,6 +184,7 @@ func doRun(config *runConfig) {
 		&run.JobOptions{
 			Cwd: cwd,
 			Env: env,
+			Shell: shell,
 			LocalExec: localExec,
 			Log: config.log.WithLocalContext("job[%s]",
 				config.name),
@@ -514,6 +534,7 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 		cwd: ui.OptString{}.New(),
 		env: ui.OptStringList{}.New(),
 		localCommand: ui.OptBool{}.New(),
+		source: ui.OptStringList{ Variadic: true }.New(),
 		stderr: newPrinterOption(os.Stderr),
 		stdout: newPrinterOption(os.Stdout),
 	}
@@ -530,6 +551,7 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('L', "local-command", config.localCommand)
 	cli.AddOption('o', "stdout", config.stdout)
+	cli.AddOption('s', "source", config.source)
 
 	err = cli.Parse()
 	if err != nil {
