@@ -68,6 +68,13 @@ type JobOptions struct {
 	// Log what happens on this `sio.Logger` if not `nil`.
 	Log sio.Logger
 
+	// Indicate if the process must be launched directly (`ShellNone`),
+	// from a shell (`ShellSimple`) or from a shell with the files usually
+	// sourced by a login shell (`ShellLogin`).
+	// If the shell is not `ShellNone` then it can also indicate a list of
+	// file to source before to execute the command.
+	Shell ShellType
+
 	// If `true` then the `Job.Signal()` channel is open.
 	Signal bool
 
@@ -95,7 +102,32 @@ func NewJobWith(name string, args []string, route net.Route, p net.Protocol, opt
 		opts.Log = sio.NewNopLogger()
 	}
 
+	if opts.Shell == nil {
+		opts.Shell = ShellNone
+	}
+
 	return newJob(name, args, route, p, opts)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type ShellType interface {
+	shell() bool
+	sourceLogin() bool
+	sources() []string
+}
+
+
+var ShellNone ShellType = &shellTypeNone{}
+
+type ShellSimple struct {
+	Sources []string
+}
+
+type ShellLogin struct {
+	Sources []string
 }
 
 
@@ -147,6 +179,17 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	m.args = args
 	m.cwd = opts.Cwd
 	m.env = opts.Env
+
+	if opts.Shell.shell() == false {
+		m.shell = shellNone
+	} else {
+		m.sources = opts.Shell.sources()
+		if opts.Shell.sourceLogin() {
+			m.shell = shellLogin
+		} else {
+			m.shell = shellSimple
+		}
+	}
 
 	err = m.check()
 	if err != nil {
@@ -328,4 +371,51 @@ func (this *job) Stdin() chan<- []byte {
 
 func (this *job) Wait() <-chan struct{} {
 	return this.waitc
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type shellTypeNone struct {
+}
+
+func (this *shellTypeNone) shell() bool {
+	return false
+}
+
+func (this *shellTypeNone) sourceLogin() bool {
+	return false
+}
+
+func (this *shellTypeNone) sources() []string {
+	return nil
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *ShellSimple) shell() bool {
+	return true
+}
+
+func (this *ShellSimple) sourceLogin() bool {
+	return false
+}
+
+func (this *ShellSimple) sources() []string {
+	return this.Sources
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *ShellLogin) shell() bool {
+	return true
+}
+
+func (this *ShellLogin) sourceLogin() bool {
+	return true
+}
+
+func (this *ShellLogin) sources() []string {
+	return this.Sources
 }
