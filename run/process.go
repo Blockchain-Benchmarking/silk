@@ -2,6 +2,7 @@ package run
 
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -42,6 +43,10 @@ func NewProcessWith(n string, a []string, o *ProcessOptions) (Process, error) {
 
 	if o.Log == nil {
 		o.Log = sio.NewNopLogger()
+	}
+
+	if o.Env == nil {
+		o.Env = make(map[string]string)
 	}
 
 	if o.Stdout == nil {
@@ -87,6 +92,8 @@ type ProcessOptions struct {
 
 	Cwd string
 
+	Env map[string]string
+
 	Setpgid bool
 
 	Stdout func ([]byte) error
@@ -96,6 +103,15 @@ type ProcessOptions struct {
 	CloseStdout func ()
 
 	CloseStderr func ()
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type InvalidEnvironmentError struct {
+	Key string
+	Value string
 }
 
 
@@ -119,8 +135,18 @@ type process struct {
 
 func newProcess(name string, args []string, opts *ProcessOptions) (*process, error) {
 	var stdout, stderr io.ReadCloser
+	var key, value string
+	var env []string
 	var this process
 	var err error
+
+	for key, value = range opts.Env {
+		if strings.Contains(key, "=") {
+			return nil, &InvalidEnvironmentError{ key, value }
+		}
+
+		env = append(env, fmt.Sprintf("%s=%s", key, value))
+	}
 
 	this.inner = exec.Command(name, args...)
 
@@ -142,6 +168,7 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 		return nil, err
 	}
 
+	this.inner.Env = env
 	this.inner.Dir = opts.Cwd
 	this.inner.SysProcAttr = &syscall.SysProcAttr{ Setpgid: opts.Setpgid }
 
@@ -300,4 +327,13 @@ func (this *processReader) transfer() {
 
 func (this *processReader) wait() {
 	<-this.closec
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func (this *InvalidEnvironmentError) Error() string {
+	return fmt.Sprintf("invalid environment: '%s' = '%s'", this.Key,
+		this.Value)
 }

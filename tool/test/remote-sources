@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+#   Can the client make the remote process source many remote files before it
+#   starts?
+#
+
+
+silk server --tcp=3200 &
+
+cat > 's0' <<EOF
+export FOO=foo
+EOF
+
+cat > 's1' <<EOF
+if [ "x\$FOO" = 'xfoo' ] ; then
+    export BAR=bar
+fi
+EOF
+
+cat > 'script' <<EOF
+#!/bin/bash
+echo \$FOO
+echo \$BAR
+EOF
+chmod 755 'script'
+
+silk run --source='s0' --source='s1' 'localhost:3200' ./script > 'observed'
+
+cat > 'expected' <<EOF
+foo
+bar
+EOF
+
+diff -Naur 'observed' 'expected'
