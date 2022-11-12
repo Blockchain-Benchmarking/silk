@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+#   Can the client make the remote process source a remote file and use it to
+#   find the command to start?
+#
+
+
+silk server --tcp=3200 &
+
+cat > 'my-script' <<EOF
+#!/bin/bash
+echo ok
+EOF
+chmod 755 'my-script'
+
+silk run --source --env=PATH="${PWD}" 'localhost:3200' my-script > 'observed'
+
+cat > 'expected' <<EOF
+ok
+EOF
+
+diff -Naur 'observed' 'expected'
