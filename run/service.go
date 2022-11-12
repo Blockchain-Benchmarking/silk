@@ -82,6 +82,15 @@ type Message struct {
 
 	// The variables/values to add or override in the process environment.
 	env map[string]string
+
+	// Indicate if the remote process must be launched outside of a shell
+	// (`shellNone`), in a simple shell with (`shellLogin`) or without
+	// (`shellSimple`) sourcing the files usually sourced by a login shell.
+	shell shellType
+
+	// If the process is to be launched in a shell then indicate a list of
+	// path to source before to execute the job.
+	sources []string
 }
 
 
@@ -101,6 +110,10 @@ const MaxJobEnvKeyLength   = math.MaxUint8
 
 const MaxJobEnvValueLength = math.MaxUint16
 
+const MaxJobSources        = math.MaxUint16
+
+const MaxJobSourceLength   = math.MaxUint16
+
 
 type JobInvalidEnvKeyError struct {
 	Key string
@@ -116,8 +129,16 @@ type JobNameTooLongError struct {
 	Name string
 }
 
+type JobSourceTooLongError struct {
+	Source string
+}
+
 type JobTooManyArgumentsError struct {
 	Args []string
+}
+
+type JobTooManySourcesError struct {
+	Sources []string
 }
 
 type JobArgumentTooLongError struct {
@@ -206,6 +227,7 @@ func newServiceProcess(parent *service, req *Message, conn net.Connection, log s
 
 func (this *serviceProcess) run() {
 	var sending sync.WaitGroup
+	var args []string
 	var proc Process
 	var name string
 	var err error
@@ -232,9 +254,11 @@ func (this *serviceProcess) run() {
 		name = this.req.name
 	}
 
+	name, args = buildCommand(name, this.req)
+
 	sending.Add(2)  // stdout + stderr
 
-	proc, err = NewProcessWith(name, this.req.args, &ProcessOptions{
+	proc, err = NewProcessWith(name, args, &ProcessOptions{
 		Log: this.log,
 
 		Cwd: this.req.cwd,
@@ -410,6 +434,69 @@ func (this *serviceProcess) transmit(proc Process) {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
+func buildCommand(name string, req *Message) (string, []string) {
+	var shell, sourcePath, shellCmd string
+	var args []string
+
+	if req.shell == shellNone {
+		args = req.args
+	} else {
+		shell = os.Getenv("SHELL")
+		args = []string{}
+
+		if req.shell == shellLogin {
+			if strings.HasSuffix(shell, "/bash") {
+				args = append(args, "--login")
+			} else if strings.HasSuffix(shell, "/zsh") {
+				args = append(args, "--login")
+			}
+		}
+
+		shellCmd = ""
+
+		for _, sourcePath = range req.sources {
+			shellCmd += fmt.Sprintf("source %s ; ",
+				protectShellWord(sourcePath))
+		}
+
+		shellCmd += protectShellCommand(name, req.args)
+
+		name = shell
+		args = append(args, "-c", shellCmd)
+	}
+
+	return name, args
+}
+
+func protectShellWord(word string) string {
+	return strings.Replace(word, "'", "'\\''", -1)
+}
+
+func protectShellCommand(name string, args []string) string {
+	var b strings.Builder
+	var arg string
+
+	b.WriteString(protectShellWord(name))
+
+	for _, arg = range args {
+		b.WriteRune(' ')
+		b.WriteString(protectShellWord(arg))
+	}
+
+	return b.String()
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type shellType = uint8
+
+const shellNone   = 0
+const shellSimple = 1
+const shellLogin  = 2
+
+
 func (this *Message) check() error {
 	var key, value string
 	var i int
@@ -450,6 +537,16 @@ func (this *Message) check() error {
 		}
 	}
 
+	if len(this.sources) > MaxJobSources {
+		return &JobTooManySourcesError{ this.sources }
+	}
+
+	for i = range this.sources {
+		if len(this.sources[i]) > MaxJobSourceLength {
+			return &JobSourceTooLongError{ this.sources[i] }
+		}
+	}
+
 	return nil
 }
 
@@ -471,6 +568,13 @@ func (this *Message) Encode(sink sio.Sink) error {
 
 	for key, value = range this.env {
 		sink = sink.WriteString8(key).WriteString16(value)
+	}
+
+	sink = sink.WriteUint8(this.shell).
+		WriteUint16(uint16(len(this.sources)))
+
+	for i = range this.sources {
+		sink = sink.WriteString16(this.sources[i])
 	}
 
 	return sink.Error()
@@ -499,6 +603,16 @@ func (this *Message) Decode(source sio.Source) error {
 				source = source.ReadString8(&key).
 					ReadString16(&value).
 					And(func () { this.env[key] = value })
+			}
+
+			return source.Error()
+		}).
+		ReadUint8(&this.shell).
+		ReadUint16(&n).AndThen(func () error {
+			this.sources = make([]string, n)
+
+			for i = range this.sources {
+				source = source.ReadString16(&this.sources[i])
 			}
 
 			return source.Error()
@@ -763,8 +877,16 @@ func (this *JobTooManyArgumentsError) Error() string {
 	return fmt.Sprintf("job has too many arguments: %d", len(this.Args))
 }
 
+func (this *JobTooManySourcesError) Error() string {
+	return fmt.Sprintf("job has too many sources: %d", len(this.Sources))
+}
+
 func (this *JobArgumentTooLongError) Error() string {
 	return fmt.Sprintf("job argument too long: %s", this.Arg)
+}
+
+func (this *JobSourceTooLongError) Error() string {
+	return fmt.Sprintf("job source path too long: %s", this.Source)
 }
 
 func (this *JobPathTooLongError) Error() string {
