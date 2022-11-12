@@ -18,19 +18,19 @@ import (
 
 const SILK_CWD_NAME = "SILK_CWD"
 
+const SILK_SHELL_NAME = "SILK_SHELL"
+
 
 // ----------------------------------------------------------------------------
 
 
 func runUsage() {
 	fmt.Printf(`
-Usage: %s run [-C<path>] [-e<str>] [-L] [-o<str>] <route> <cmd>
-         [<args>]
+Usage: %s run [-C<path>] [-e<str>] [-E<str>] [-L] [-o<str>] [-s]
+         <route> <cmd> [<args>]
 
 Run a command on remote server.
 The <route> indicate on what remote server to run the command.
-If the %s environment variable is set then set the current directory to
-its value on the remote server before to run the command.
 
 Options:
 
@@ -44,6 +44,13 @@ Options:
                               accordingly to the given <str> specification.
                               See (Printing) section.
 
+  -E<str>, --env=<str>        Add the following <str> environment variable to
+                              the remote process. The provided <str> can be
+                              either in the form <var> to define an empty
+                              variable or <var>=<val> to assign it a value.
+                              If the '--source' option is supplied, the
+                              environment of the shell is updated.
+
   -L, --local-command         Interpret <cmd> as a local file to be sent to
                               the remote server and to be executed.
                               If <cmd> is '-' then read the file to be executed
@@ -52,6 +59,21 @@ Options:
   -o<str>, --stdout=<str>     Print the standard output of the remote processes
                               accordingly to the given <str> specification.
                               See (Printing) section.
+
+  -s[<str>] --source[=<str>]  Launch the remote process from a shell after
+                              sourcing the remote file whose path is <str> if
+                              supplied or the files that would be sourced by a
+                              login shell otherwise.
+                              The shell used is the one stored in the $SHELL
+                              variable in the remote server environment.
+
+
+Environment:
+
+  %-20s        Set the current directory to its value on the
+                              remote server before to run the command.
+
+  %-20s        Launch the remote command in a shell with login files sourced.
 
 
 Printing:
@@ -72,7 +94,7 @@ Printing:
                               format string where '%%n' is interpreted as the
                               remote server name.
 
-`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME)
+`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME, SILK_SHELL_NAME)
 
 	os.Exit(0)
 }
