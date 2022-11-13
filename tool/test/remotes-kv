@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+#   Can remote servers run a command each with its own text substitution?
+#
+
+
+silk server --tcp=3200 --name='a' &
+silk server --tcp=3201 --name='b' &
+
+silk kv 'localhost:3200' id=17
+silk kv 'localhost:3201' id='foo'
+
+silk run '(localhost:3200|localhost:3201)' echo 'My ID is "%{id}"' > 'observed'
+
+sort 'observed' > 'sorted'
+
+cat > 'expected' <<EOF
+a :: My ID is "17"
+b :: My ID is "foo"
+EOF
+
+diff -Naur 'sorted' 'expected'

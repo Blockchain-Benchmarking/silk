@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"regexp"
 	sio "silk/io"
+	"silk/kv"
 	"silk/net"
 	"silk/util/atomic"
 	"silk/util/rand"
@@ -26,6 +27,8 @@ type Service interface {
 }
 
 type ServiceOptions struct {
+	Kv kv.Formatter
+
 	Log sio.Logger
 
 	Name string
@@ -41,6 +44,10 @@ func NewServiceWith(opts *ServiceOptions) (Service, error) {
 
 	if opts == nil {
 		opts = &ServiceOptions{}
+	}
+
+	if opts.Kv == nil {
+		opts.Kv = kv.Verbatim
 	}
 
 	if opts.Log == nil {
@@ -176,6 +183,7 @@ type UnknownMessageError struct {
 type service struct {
 	log sio.Logger
 	name string
+	kv kv.Formatter
 	nextId atomic.Uint64
 }
 
@@ -184,6 +192,7 @@ func newService(opts *ServiceOptions) *service {
 
 	this.log = opts.Log
 	this.name = opts.Name
+	this.kv = opts.Kv
 	this.nextId.Store(0)
 
 	return &this
@@ -196,7 +205,7 @@ func (this *service) Handle(msg *Message, conn net.Connection) {
 	log.Trace("request: %s %v", log.Emph(0, msg.name),
 		log.Emph(0, msg.args))
 
-	newServiceProcess(this, msg, conn, log).run()
+	newServiceProcess(this, msg, this.kv, conn, log).run()
 
 	close(conn.Send())
 }
@@ -209,16 +218,18 @@ type serviceProcess struct {
 	parent *service
 	log sio.Logger
 	req *Message
+	kv kv.Formatter
 	conn net.Connection
 	tempExec *os.File
 }
 
-func newServiceProcess(parent *service, req *Message, conn net.Connection, log sio.Logger) *serviceProcess {
+func newServiceProcess(parent *service, req *Message, kv kv.Formatter, conn net.Connection, log sio.Logger) *serviceProcess {
 	var this serviceProcess
 
 	this.parent = parent
 	this.log = log
 	this.req = req
+	this.kv = kv
 	this.conn = conn
 	this.tempExec = nil
 
@@ -231,6 +242,7 @@ func (this *serviceProcess) run() {
 	var proc Process
 	var name string
 	var err error
+	var i int
 
 	this.log.Trace("send service name: %s",
 		this.log.Emph(0, this.parent.name))
@@ -252,6 +264,20 @@ func (this *serviceProcess) run() {
 		defer os.Remove(name)
 	} else {
 		name = this.req.name
+	}
+
+	name, err = this.kv.Format(name)
+	if err != nil {
+		this.log.Warn("%s", err.Error())
+		return
+	}
+
+	for i = range this.req.args {
+		this.req.args[i], err = this.kv.Format(this.req.args[i])
+		if err != nil {
+			this.log.Warn("%s", err.Error())
+			return
+		}
 	}
 
 	name, args = buildCommand(name, this.req)

@@ -31,6 +31,8 @@ Usage: %s run [-C<path>] [-e<str>] [-E<str>] [-L] [-o<str>] [-s]
 
 Run a command on remote server.
 The <route> indicate on what remote server to run the command.
+The provided <args> are subject to text substitution (see 'kv --help').
+The <cmd> is also subject to txt substitution unless -L is specified.
 
 Options:
 
