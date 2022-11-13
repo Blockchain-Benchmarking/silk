@@ -7,6 +7,7 @@ import (
 	sio "silk/io"
 	"silk/net"
 	"sync"
+	"syscall"
 )
 
 
@@ -55,6 +56,10 @@ type JobOptions struct {
 	// Otherwise it executes it in the server cwd.
 	Cwd string
 
+	// Add or override the remote `Process` environment with the variables
+	// defined in this map.
+	Env map[string]string
+
 	// If not `nil` then ignore the `name` argument of `NewJobWith` and
 	// transfer what is `Read` from this parameter to the remote servers
 	// and execute it.
@@ -62,6 +67,13 @@ type JobOptions struct {
 
 	// Log what happens on this `sio.Logger` if not `nil`.
 	Log sio.Logger
+
+	// Indicate if the process must be launched directly (`ShellNone`),
+	// from a shell (`ShellSimple`) or from a shell with the files usually
+	// sourced by a login shell (`ShellLogin`).
+	// If the shell is not `ShellNone` then it can also indicate a list of
+	// file to source before to execute the command.
+	Shell ShellType
 
 	// If `true` then the `Job.Signal()` channel is open.
 	Signal bool
@@ -90,7 +102,32 @@ func NewJobWith(name string, args []string, route net.Route, p net.Protocol, opt
 		opts.Log = sio.NewNopLogger()
 	}
 
+	if opts.Shell == nil {
+		opts.Shell = ShellNone
+	}
+
 	return newJob(name, args, route, p, opts)
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type ShellType interface {
+	shell() bool
+	sourceLogin() bool
+	sources() []string
+}
+
+
+var ShellNone ShellType = &shellTypeNone{}
+
+type ShellSimple struct {
+	Sources []string
+}
+
+type ShellLogin struct {
+	Sources []string
 }
 
 
@@ -141,6 +178,18 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 
 	m.args = args
 	m.cwd = opts.Cwd
+	m.env = opts.Env
+
+	if opts.Shell.shell() == false {
+		m.shell = shellNone
+	} else {
+		m.sources = opts.Shell.sources()
+		if opts.Shell.sourceLogin() {
+			m.shell = shellLogin
+		} else {
+			m.shell = shellSimple
+		}
+	}
 
 	err = m.check()
 	if err != nil {
@@ -234,7 +283,7 @@ func (this *job) transmitSignal(transmitting *sync.WaitGroup) {
 	var err error
 
 	for s = range this.signalc {
-		scode, err = signalCode(s)
+		scode, err = signalCode(s.(syscall.Signal))
 		if err != nil {
 			this.log.Warn("%s", err.Error())
 			continue
@@ -322,4 +371,51 @@ func (this *job) Stdin() chan<- []byte {
 
 func (this *job) Wait() <-chan struct{} {
 	return this.waitc
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type shellTypeNone struct {
+}
+
+func (this *shellTypeNone) shell() bool {
+	return false
+}
+
+func (this *shellTypeNone) sourceLogin() bool {
+	return false
+}
+
+func (this *shellTypeNone) sources() []string {
+	return nil
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *ShellSimple) shell() bool {
+	return true
+}
+
+func (this *ShellSimple) sourceLogin() bool {
+	return false
+}
+
+func (this *ShellSimple) sources() []string {
+	return this.Sources
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *ShellLogin) shell() bool {
+	return true
+}
+
+func (this *ShellLogin) sourceLogin() bool {
+	return true
+}
+
+func (this *ShellLogin) sources() []string {
+	return this.Sources
 }

@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+#   Can the client provide environment variables to remote process?
+#
+
+
+silk server --tcp=3200 &
+
+cat > 'script' <<EOF
+#!/bin/bash
+echo \$MY_VARIABLE
+EOF
+chmod 755 'script'
+
+silk run --env=MY_VARIABLE='foo' 'localhost:3200' ./script > 'observed'
+
+cat > 'expected' <<EOF
+foo
+EOF
+
+diff -Naur 'observed' 'expected'

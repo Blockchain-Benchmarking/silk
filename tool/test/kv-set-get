@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+#   Is a remote server able store and load key/value pairs?
+#
+
+
+silk server --tcp=3200 &
+
+silk kv 'localhost:3200' a=foo b=bar
+
+silk kv 'localhost:3200' a  > 'observed'
+silk kv 'localhost:3200' b >> 'observed'
+
+cat > 'expected' <<EOF
+foo
+bar
+EOF
+
+diff -Naur 'observed' 'expected'

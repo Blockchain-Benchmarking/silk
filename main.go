@@ -15,7 +15,7 @@ import (
 
 
 const ProgramName = "silk"
-const ProgramVersion = "0.2.0"
+const ProgramVersion = "0.3.0"
 const AuthorName = "Gauthier Voron"
 const AuthorEmail = "gauthier.voron@epfl.ch"
 
@@ -47,6 +47,8 @@ Usage: %s [-h | --help] [-l<path> | --log=<path>] [-v | --verbose[=<str>]]
          [--version] <command> [<args>]
 
 Available commands:
+
+  kv          List, get, set or delete key/value pairs on remote servers
 
   run         Run a command on remote servers
 
@@ -217,6 +219,8 @@ func main() {
 	}
 
 	switch command {
+	case "kv":
+		kvMain(cli, verbose)
 	case "run":
 		runMain(cli, verbose)
 	case "send":

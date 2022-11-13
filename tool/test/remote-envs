@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+#   Can the client provide many environment variables to remote process?
+#
+
+
+silk server --tcp=3200 &
+
+cat > 'script' <<EOF
+#!/bin/bash
+echo \$VAR_0
+echo \$VAR_1
+EOF
+chmod 755 'script'
+
+silk run -EVAR_0='foo' -EVAR_1='bar' 'localhost:3200' ./script > 'observed'
+
+cat > 'expected' <<EOF
+foo
+bar
+EOF
+
+diff -Naur 'observed' 'expected'

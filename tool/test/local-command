@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#   Can a user execute a local script remotely?
+#
+
+
+silk server --tcp=3200 &
+
+silk run -L 'localhost:3200' > 'observed' <<EOF
+#!/bin/bash
+echo $PATH
+EOF
+
+echo "$PATH" > "expected"
+
+diff -Naur "observed" "expected"

@@ -4,8 +4,8 @@ BIN := bin/
 export GOPATH=$(PWD)/.go/
 
 
-modules := io net run ui util/atomic util/rand
-mains := main run send server
+modules := io kv net run ui util/atomic util/rand
+mains := kv main run send server
 
 
 T ?= $(modules)
@@ -35,8 +35,13 @@ install: $(BIN)silk
 	cp $< $(prefix)/bin/silk
 
 
-test:
+test: unit-test validation-test
+
+unit-test:
 	go test $(test_verbosity_options) -count=1 $(test_parameters)
+
+validation-test: $(BIN)silk
+	./tool/validate -p $(BIN)
 
 bench:
 	go test $(test_verbosity_options) -bench=. $(addprefix ./, $(T))

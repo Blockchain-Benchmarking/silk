@@ -2,11 +2,14 @@ package run
 
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	sio "silk/io"
 	"strings"
+	"sync"
+	"syscall"
 )
 
 
@@ -16,7 +19,7 @@ import (
 type Process interface {
 	Exit() uint8
 
-	Kill(os.Signal)
+	Kill(syscall.Signal)
 
 	Stdin(data []byte) error
 
@@ -40,6 +43,10 @@ func NewProcessWith(n string, a []string, o *ProcessOptions) (Process, error) {
 
 	if o.Log == nil {
 		o.Log = sio.NewNopLogger()
+	}
+
+	if o.Env == nil {
+		o.Env = make(map[string]string)
 	}
 
 	if o.Stdout == nil {
@@ -85,6 +92,10 @@ type ProcessOptions struct {
 
 	Cwd string
 
+	Env map[string]string
+
+	Setpgid bool
+
 	Stdout func ([]byte) error
 
 	Stderr func ([]byte) error
@@ -95,10 +106,20 @@ type ProcessOptions struct {
 }
 
 
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type InvalidEnvironmentError struct {
+	Key string
+	Value string
+}
+
+
 // ----------------------------------------------------------------------------
 
 
-const ioBufferSize = 1 << 16
+const maxIoBufferSize = 1 << 16
+const minIoBufferSize = 1 << 10
 
 
 type process struct {
@@ -114,8 +135,18 @@ type process struct {
 
 func newProcess(name string, args []string, opts *ProcessOptions) (*process, error) {
 	var stdout, stderr io.ReadCloser
+	var key, value string
+	var env []string
 	var this process
 	var err error
+
+	for key, value = range opts.Env {
+		if strings.Contains(key, "=") {
+			return nil, &InvalidEnvironmentError{ key, value }
+		}
+
+		env = append(env, fmt.Sprintf("%s=%s", key, value))
+	}
 
 	this.inner = exec.Command(name, args...)
 
@@ -137,9 +168,12 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 		return nil, err
 	}
 
+	this.inner.Env = env
+	this.inner.Dir = opts.Cwd
+	this.inner.SysProcAttr = &syscall.SysProcAttr{ Setpgid: opts.Setpgid }
+
 	this.log = opts.Log
 	this.logStdin = this.log.WithLocalContext("stdin")
-	this.inner.Dir = opts.Cwd
 	this.stdout = newProcessReader(stdout, opts.Stdout, opts.CloseStdout,
 		this.log.WithLocalContext("stdout"))
 	this.stderr = newProcessReader(stderr, opts.Stderr, opts.CloseStderr,
@@ -151,6 +185,7 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 }
 
 func (this *process) run() error {
+	var transferring sync.WaitGroup
 	var err error
 
 	this.log.Debug("start '%s': '%s'", this.log.Emph(0, this.inner.Path),
@@ -163,16 +198,34 @@ func (this *process) run() error {
 		return err
 	}
 
-	go this.stdout.transfer()
-	go this.stderr.transfer()
-	go this.waitTermination()
+	this.log.Debug("started as %d",
+		this.log.Emph(1, this.inner.Process.Pid),)
+
+	transferring.Add(2)
+
+	go func () {
+		this.stdout.transfer()
+		transferring.Done()
+	}()
+
+	go func () {
+		this.stderr.transfer()
+		transferring.Done()
+	}()
+
+	go func () {
+		transferring.Wait()
+		this.waitTermination()
+	}()
 
 	return nil
 }
 
-func (this *process) Kill(sig os.Signal) {
-	this.log.Trace("send signal %s", this.log.Emph(1, sig.String()))
-	this.inner.Process.Signal(sig)
+func (this *process) Kill(sig syscall.Signal) {
+	this.log.Debug("send signal %d to %d",
+		this.log.Emph(1, sig),
+		this.log.Emph(1, -this.inner.Process.Pid))
+	syscall.Kill(-this.inner.Process.Pid, sig)
 }
 
 func (this *process) Stdin(data []byte) error {
@@ -238,11 +291,15 @@ func newProcessReader(pipe io.ReadCloser, writef func ([]byte) error, closef fun
 }
 
 func (this *processReader) transfer() {
-	var b []byte = make([]byte, ioBufferSize)
 	var readErr, callErr error
+	var b []byte
 	var n int
 
 	for {
+		if len(b) <= minIoBufferSize {
+			b = make([]byte, maxIoBufferSize)
+		}
+
 		n, readErr = this.pipe.Read(b)
 
 		if n > 0 {
@@ -257,6 +314,8 @@ func (this *processReader) transfer() {
 		if readErr != nil {
 			break
 		}
+
+		b = b[n:]
 	}
 
 	this.log.Trace("close")
@@ -268,4 +327,13 @@ func (this *processReader) transfer() {
 
 func (this *processReader) wait() {
 	<-this.closec
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+func (this *InvalidEnvironmentError) Error() string {
+	return fmt.Sprintf("invalid environment: '%s' = '%s'", this.Key,
+		this.Value)
 }

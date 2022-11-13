@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+#   Can a remote server execute a command in a given working directory
+#   specified on command line as an absolute path?
+#
+
+
+silk server --tcp=3200 &
+
+mkdir 'trap'
+mkdir 'dir'
+mkdir 'dir/cwd'
+touch 'dir/cwd/a' 'dir/cwd/b'
+
+export SILK_CWD='trap'
+
+silk run -C "${PWD}/dir/cwd" 'localhost:3200' ls -1 > "observed"
+
+cat > "expected" <<EOF
+a
+b
+EOF
+
+diff -Naur "observed" "expected"

@@ -12,10 +12,13 @@ import (
 	"silk/ui"
 	"strings"
 	"sync"
+	"syscall"
 )
 
 
 const SILK_CWD_NAME = "SILK_CWD"
+
+const SILK_SHELL_NAME = "SILK_SHELL"
 
 
 // ----------------------------------------------------------------------------
@@ -23,13 +26,13 @@ const SILK_CWD_NAME = "SILK_CWD"
 
 func runUsage() {
 	fmt.Printf(`
-Usage: %s run [-C<path>] [-e<str>] [-L] [-o<str>] <route> <cmd>
-         [<args>]
+Usage: %s run [-C<path>] [-e<str>] [-E<str>] [-L] [-o<str>] [-s]
+         <route> <cmd> [<args>]
 
 Run a command on remote server.
 The <route> indicate on what remote server to run the command.
-If the %s environment variable is set then set the current directory to
-its value on the remote server before to run the command.
+The provided <args> are subject to text substitution (see 'kv --help').
+The <cmd> is also subject to txt substitution unless -L is specified.
 
 Options:
 
@@ -43,6 +46,13 @@ Options:
                               accordingly to the given <str> specification.
                               See (Printing) section.
 
+  -E<str>, --env=<str>        Add the following <str> environment variable to
+                              the remote process. The provided <str> can be
+                              either in the form <var> to define an empty
+                              variable or <var>=<val> to assign it a value.
+                              If the '--source' option is supplied, the
+                              environment of the shell is updated.
+
   -L, --local-command         Interpret <cmd> as a local file to be sent to
                               the remote server and to be executed.
                               If <cmd> is '-' then read the file to be executed
@@ -51,6 +61,21 @@ Options:
   -o<str>, --stdout=<str>     Print the standard output of the remote processes
                               accordingly to the given <str> specification.
                               See (Printing) section.
+
+  -s[<str>] --source[=<str>]  Launch the remote process from a shell after
+                              sourcing the remote file whose path is <str> if
+                              supplied or the files that would be sourced by a
+                              login shell otherwise.
+                              The shell used is the one stored in the $SHELL
+                              variable in the remote server environment.
+
+
+Environment:
+
+  %-20s        Set the current directory to its value on the
+                              remote server before to run the command.
+
+  %-20s        Launch the remote command in a shell with login files sourced.
 
 
 Printing:
@@ -71,7 +96,7 @@ Printing:
                               format string where '%%n' is interpreted as the
                               remote server name.
 
-`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME)
+`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME, SILK_SHELL_NAME)
 
 	os.Exit(0)
 }
@@ -86,25 +111,35 @@ type runConfig struct {
 	name string
 	args []string
 	cwd ui.OptionString
+	env ui.OptionStringList
 	localCommand ui.OptionBool
 	stderr *printerOption
 	stdout *printerOption
+	source ui.OptionStringList
 }
 
+
+func setupRunSigmask() {
+	signal.Ignore(syscall.SIGTSTP)
+	signal.Ignore(syscall.SIGTTIN)
+	signal.Ignore(syscall.SIGTTOU)
+}
 
 func doRun(config *runConfig) {
 	var stderrPrinters, stdoutPrinters []printer
 	var printing sync.WaitGroup
 	var localExec io.ReadCloser
 	var resolver net.Resolver
+	var env map[string]string
+	var shell run.ShellType
 	var transmitStdin bool
 	var agents []run.Agent
+	var cwd, keyval string
 	var route net.Route
 	var agent run.Agent
 	var job run.Job
-	var cwd string
 	var err error
-	var i int
+	var i, n int
 
 	transmitStdin = true
 
@@ -131,6 +166,38 @@ func doRun(config *runConfig) {
 		}
 	}
 
+	if len(config.env.Values()) > 0 {
+		env = make(map[string]string)
+
+		for _, keyval = range config.env.Values() {
+			i = strings.Index(keyval, "=")
+			if i < 0 {
+				env[keyval] = ""
+			} else {
+				env[keyval[:i]] = keyval[i+1:]
+			}
+		}
+	}
+
+	n = len(config.source.Assignments())
+	if (os.Getenv(SILK_SHELL_NAME) == "") && (n == 0) {
+		shell = run.ShellNone
+	} else if os.Getenv(SILK_SHELL_NAME) != "" {
+		shell = &run.ShellLogin{
+			Sources: config.source.Values(),
+		}
+	} else if n > len(config.source.Values()) {
+		shell = &run.ShellLogin{
+			Sources: config.source.Values(),
+		}
+	} else {
+		shell = &run.ShellSimple{
+			Sources: config.source.Values(),
+		}
+	}
+
+	setupRunSigmask()
+
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
 		protocol, &net.TcpResolverOptions{
 			Log: config.log.WithLocalContext("resolve"),
@@ -140,6 +207,8 @@ func doRun(config *runConfig) {
 	job = run.NewJobWith(config.name, config.args, route, protocol,
 		&run.JobOptions{
 			Cwd: cwd,
+			Env: env,
+			Shell: shell,
 			LocalExec: localExec,
 			Log: config.log.WithLocalContext("job[%s]",
 				config.name),
@@ -175,7 +244,7 @@ func doRun(config *runConfig) {
 		}(i, agent)
 
 		go func (index int, agent run.Agent) {
-			stderrPrinters[i].printChannel(agent.Stderr())
+			stderrPrinters[index].printChannel(agent.Stderr())
 			printing.Done()
 		}(i, agent)
 	}
@@ -487,7 +556,9 @@ func (this *invalidPrinterType) Error() string {
 func runMain(cli ui.Cli, verbose *verbosity) {
 	var config runConfig = runConfig{
 		cwd: ui.OptString{}.New(),
+		env: ui.OptStringList{}.New(),
 		localCommand: ui.OptBool{}.New(),
+		source: ui.OptStringList{ Variadic: true }.New(),
 		stderr: newPrinterOption(os.Stderr),
 		stdout: newPrinterOption(os.Stdout),
 	}
@@ -499,10 +570,12 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 
 	cli.AddOption('C', "cwd", config.cwd)
 	cli.AddOption('e', "stderr", config.stderr)
+	cli.AddOption('E', "env", config.env)
 	cli.DelOption('h', "help")
 	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('L', "local-command", config.localCommand)
 	cli.AddOption('o', "stdout", config.stdout)
+	cli.AddOption('s', "source", config.source)
 
 	err = cli.Parse()
 	if err != nil {
@@ -516,7 +589,11 @@ func runMain(cli ui.Cli, verbose *verbosity) {
 
 	config.name, ok = cli.SkipWord()
 	if ok == false {
-		fatal("missing cmd operand")
+		if config.localCommand.Value() {
+			config.name = "-"
+		} else {
+			fatal("missing cmd operand")
+		}
 	}
 
 	config.args = cli.Arguments()[cli.Parsed():]

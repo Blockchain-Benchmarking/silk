@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+#   Can a remote server execute a command in a given working directory?
+#
+
+
+silk server --tcp=3200 &
+
+mkdir 'dir'
+mkdir 'dir/cwd'
+touch 'dir/cwd/a' 'dir/cwd/b'
+
+silk run -C 'dir/cwd' 'localhost:3200' ls -1 > "observed"
+
+cat > "expected" <<EOF
+a
+b
+EOF
+
+diff -Naur "observed" "expected"

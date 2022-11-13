@@ -7,7 +7,9 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"regexp"
 	sio "silk/io"
+	"silk/kv"
 	"silk/net"
 	"silk/util/atomic"
 	"silk/util/rand"
@@ -25,6 +27,8 @@ type Service interface {
 }
 
 type ServiceOptions struct {
+	Kv kv.Formatter
+
 	Log sio.Logger
 
 	Name string
@@ -40,6 +44,10 @@ func NewServiceWith(opts *ServiceOptions) (Service, error) {
 
 	if opts == nil {
 		opts = &ServiceOptions{}
+	}
+
+	if opts.Kv == nil {
+		opts.Kv = kv.Verbatim
 	}
 
 	if opts.Log == nil {
@@ -78,26 +86,66 @@ type Message struct {
 	// If not empty then indicate a directory to set as cwd for the process
 	// to run.
 	cwd string
+
+	// The variables/values to add or override in the process environment.
+	env map[string]string
+
+	// Indicate if the remote process must be launched outside of a shell
+	// (`shellNone`), in a simple shell with (`shellLogin`) or without
+	// (`shellSimple`) sourcing the files usually sourced by a login shell.
+	shell shellType
+
+	// If the process is to be launched in a shell then indicate a list of
+	// path to source before to execute the job.
+	sources []string
 }
 
 
 const MaxServiceNameLength = math.MaxUint8
 
-const MaxJobNameLength = math.MaxUint16
+const MaxJobNameLength     = math.MaxUint16
 
-const MaxJobArguments = math.MaxUint16
+const MaxJobArguments      = math.MaxUint16
 
 const MaxJobArgumentLength = math.MaxUint16
 
-const MaxJobPathLength = math.MaxUint16
+const MaxJobPathLength     = math.MaxUint16
 
+const MaxJobEnvVariables   = math.MaxUint16
+
+const MaxJobEnvKeyLength   = math.MaxUint8
+
+const MaxJobEnvValueLength = math.MaxUint16
+
+const MaxJobSources        = math.MaxUint16
+
+const MaxJobSourceLength   = math.MaxUint16
+
+
+type JobInvalidEnvKeyError struct {
+	Key string
+	Value string
+}
+
+type JobInvalidEnvValueError struct {
+	Key string
+	Value string
+}
 
 type JobNameTooLongError struct {
 	Name string
 }
 
+type JobSourceTooLongError struct {
+	Source string
+}
+
 type JobTooManyArgumentsError struct {
 	Args []string
+}
+
+type JobTooManySourcesError struct {
+	Sources []string
 }
 
 type JobArgumentTooLongError struct {
@@ -106,6 +154,10 @@ type JobArgumentTooLongError struct {
 
 type JobPathTooLongError struct {
 	Path string
+}
+
+type JobTooManyEnvVariablesError struct {
+	Env map[string]string
 }
 
 type JobUnknownSignalError struct {
@@ -131,6 +183,7 @@ type UnknownMessageError struct {
 type service struct {
 	log sio.Logger
 	name string
+	kv kv.Formatter
 	nextId atomic.Uint64
 }
 
@@ -139,6 +192,7 @@ func newService(opts *ServiceOptions) *service {
 
 	this.log = opts.Log
 	this.name = opts.Name
+	this.kv = opts.Kv
 	this.nextId.Store(0)
 
 	return &this
@@ -151,7 +205,7 @@ func (this *service) Handle(msg *Message, conn net.Connection) {
 	log.Trace("request: %s %v", log.Emph(0, msg.name),
 		log.Emph(0, msg.args))
 
-	newServiceProcess(this, msg, conn, log).run()
+	newServiceProcess(this, msg, this.kv, conn, log).run()
 
 	close(conn.Send())
 }
@@ -164,16 +218,18 @@ type serviceProcess struct {
 	parent *service
 	log sio.Logger
 	req *Message
+	kv kv.Formatter
 	conn net.Connection
 	tempExec *os.File
 }
 
-func newServiceProcess(parent *service, req *Message, conn net.Connection, log sio.Logger) *serviceProcess {
+func newServiceProcess(parent *service, req *Message, kv kv.Formatter, conn net.Connection, log sio.Logger) *serviceProcess {
 	var this serviceProcess
 
 	this.parent = parent
 	this.log = log
 	this.req = req
+	this.kv = kv
 	this.conn = conn
 	this.tempExec = nil
 
@@ -182,9 +238,11 @@ func newServiceProcess(parent *service, req *Message, conn net.Connection, log s
 
 func (this *serviceProcess) run() {
 	var sending sync.WaitGroup
+	var args []string
 	var proc Process
 	var name string
 	var err error
+	var i int
 
 	this.log.Trace("send service name: %s",
 		this.log.Emph(0, this.parent.name))
@@ -208,12 +266,32 @@ func (this *serviceProcess) run() {
 		name = this.req.name
 	}
 
+	name, err = this.kv.Format(name)
+	if err != nil {
+		this.log.Warn("%s", err.Error())
+		return
+	}
+
+	for i = range this.req.args {
+		this.req.args[i], err = this.kv.Format(this.req.args[i])
+		if err != nil {
+			this.log.Warn("%s", err.Error())
+			return
+		}
+	}
+
+	name, args = buildCommand(name, this.req)
+
 	sending.Add(2)  // stdout + stderr
 
-	proc, err = NewProcessWith(name, this.req.args, &ProcessOptions{
+	proc, err = NewProcessWith(name, args, &ProcessOptions{
 		Log: this.log,
 
 		Cwd: this.req.cwd,
+
+		Env: this.req.env,
+
+		Setpgid: true,
 
 		Stdout: func (b []byte) error {
 			this.conn.Send() <- net.MessageProtocol{
@@ -316,8 +394,8 @@ func (this *serviceProcess) receiveExecutable() error {
 
 func (this *serviceProcess) transmit(proc Process) {
 	var stdinBcast, stdinUcast bool
+	var sig syscall.Signal
 	var msg net.Message
-	var sig os.Signal
 	var err error
 
 	stdinBcast = true
@@ -382,7 +460,71 @@ func (this *serviceProcess) transmit(proc Process) {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
+func buildCommand(name string, req *Message) (string, []string) {
+	var shell, sourcePath, shellCmd string
+	var args []string
+
+	if req.shell == shellNone {
+		args = req.args
+	} else {
+		shell = os.Getenv("SHELL")
+		args = []string{}
+
+		if req.shell == shellLogin {
+			if strings.HasSuffix(shell, "/bash") {
+				args = append(args, "--login")
+			} else if strings.HasSuffix(shell, "/zsh") {
+				args = append(args, "--login")
+			}
+		}
+
+		shellCmd = ""
+
+		for _, sourcePath = range req.sources {
+			shellCmd += fmt.Sprintf("source %s ; ",
+				protectShellWord(sourcePath))
+		}
+
+		shellCmd += protectShellCommand(name, req.args)
+
+		name = shell
+		args = append(args, "-c", shellCmd)
+	}
+
+	return name, args
+}
+
+func protectShellWord(word string) string {
+	return strings.Replace(word, "'", "'\\''", -1)
+}
+
+func protectShellCommand(name string, args []string) string {
+	var b strings.Builder
+	var arg string
+
+	b.WriteString(protectShellWord(name))
+
+	for _, arg = range args {
+		b.WriteRune(' ')
+		b.WriteString(protectShellWord(arg))
+	}
+
+	return b.String()
+}
+
+
+//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+type shellType = uint8
+
+const shellNone   = 0
+const shellSimple = 1
+const shellLogin  = 2
+
+
 func (this *Message) check() error {
+	var key, value string
 	var i int
 
 	if len(this.name) > MaxJobNameLength {
@@ -403,10 +545,41 @@ func (this *Message) check() error {
 		return &JobPathTooLongError{ this.cwd }
 	}
 
+	if len(this.env) > MaxJobEnvVariables {
+		return &JobTooManyEnvVariablesError{ this.env }
+	}
+
+	for key, value = range this.env {
+		if len(key) > MaxJobEnvKeyLength {
+			return &JobInvalidEnvKeyError{ key, value }
+		}
+
+		if envKeyRegexp.Match([]byte(key)) == false {
+			return &JobInvalidEnvKeyError{ key, value }
+		}
+
+		if len(value) > MaxJobEnvValueLength {
+			return &JobInvalidEnvValueError{ key, value }
+		}
+	}
+
+	if len(this.sources) > MaxJobSources {
+		return &JobTooManySourcesError{ this.sources }
+	}
+
+	for i = range this.sources {
+		if len(this.sources[i]) > MaxJobSourceLength {
+			return &JobSourceTooLongError{ this.sources[i] }
+		}
+	}
+
 	return nil
 }
 
+var envKeyRegexp *regexp.Regexp = regexp.MustCompile("^[-_a-zA-Z0-9/]{1,255}$")
+
 func (this *Message) Encode(sink sio.Sink) error {
+	var key, value string
 	var i int
 
 	sink = sink.WriteString16(this.name).
@@ -416,12 +589,25 @@ func (this *Message) Encode(sink sio.Sink) error {
 		sink = sink.WriteString16(this.args[i])
 	}
 
-	sink = sink.WriteString16(this.cwd)
+	sink = sink.WriteString16(this.cwd).
+		WriteUint16(uint16(len(this.env)))
+
+	for key, value = range this.env {
+		sink = sink.WriteString8(key).WriteString16(value)
+	}
+
+	sink = sink.WriteUint8(this.shell).
+		WriteUint16(uint16(len(this.sources)))
+
+	for i = range this.sources {
+		sink = sink.WriteString16(this.sources[i])
+	}
 
 	return sink.Error()
 }
 
 func (this *Message) Decode(source sio.Source) error {
+	var key, value string
 	var n uint16
 	var i int
 
@@ -436,6 +622,27 @@ func (this *Message) Decode(source sio.Source) error {
 			return source.Error()
 		}).
 		ReadString16(&this.cwd).
+		ReadUint16(&n).AndThen(func () error {
+			this.env = make(map[string]string)
+
+			for i = 0; i < int(n); i++ {
+				source = source.ReadString8(&key).
+					ReadString16(&value).
+					And(func () { this.env[key] = value })
+			}
+
+			return source.Error()
+		}).
+		ReadUint8(&this.shell).
+		ReadUint16(&n).AndThen(func () error {
+			this.sources = make([]string, n)
+
+			for i = range this.sources {
+				source = source.ReadString16(&this.sources[i])
+			}
+
+			return source.Error()
+		}).
 		Error()
 }
 
@@ -614,7 +821,7 @@ func (this *jobSignal) Decode(source sio.Source) error {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-func signalCode(sig os.Signal) (uint8, error) {
+func signalCode(sig syscall.Signal) (uint8, error) {
 	switch sig {
 	case syscall.SIGABRT:   return  0, nil
 	case syscall.SIGALRM:   return  1, nil
@@ -649,7 +856,7 @@ func signalCode(sig os.Signal) (uint8, error) {
 	}
 }
 
-func codeSignal(scode uint8) (os.Signal, error) {
+func codeSignal(scode uint8) (syscall.Signal, error) {
 	switch scode {
 	case  0: return syscall.SIGABRT,   nil
 	case  1: return syscall.SIGALRM,   nil
@@ -680,7 +887,7 @@ func codeSignal(scode uint8) (os.Signal, error) {
 	case 26: return syscall.SIGWINCH,  nil
 	case 27: return syscall.SIGXCPU,   nil
 	case 28: return syscall.SIGXFSZ,   nil
-	default: return nil, &JobUnknownSignalCodeError{ scode }
+	default: return 0, &JobUnknownSignalCodeError{ scode }
 	}
 }
 
@@ -696,8 +903,16 @@ func (this *JobTooManyArgumentsError) Error() string {
 	return fmt.Sprintf("job has too many arguments: %d", len(this.Args))
 }
 
+func (this *JobTooManySourcesError) Error() string {
+	return fmt.Sprintf("job has too many sources: %d", len(this.Sources))
+}
+
 func (this *JobArgumentTooLongError) Error() string {
 	return fmt.Sprintf("job argument too long: %s", this.Arg)
+}
+
+func (this *JobSourceTooLongError) Error() string {
+	return fmt.Sprintf("job source path too long: %s", this.Source)
 }
 
 func (this *JobPathTooLongError) Error() string {
@@ -718,4 +933,19 @@ func (this *ServiceNameTooLongError) Error() string {
 
 func (this *UnknownMessageError) Error() string {
 	return fmt.Sprintf("unknown message: %T", this.Msg)
+}
+
+func (this *JobTooManyEnvVariablesError) Error() string {
+	return fmt.Sprintf("job has too many environment variables: %d",
+		len(this.Env))
+}
+
+func (this *JobInvalidEnvKeyError) Error() string {
+	return fmt.Sprintf("job environment variable name invalid: %s",
+		this.Key)
+}
+
+func (this *JobInvalidEnvValueError) Error() string {
+	return fmt.Sprintf("job environment variable value invalid: %s (%s)",
+		this.Value, this.Key)
 }

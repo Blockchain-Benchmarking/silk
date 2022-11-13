@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+#   Can a client send a directory to a remote server even if a directory wth
+#   the same name already exists?
+#
+
+
+silk server --tcp=3200 &
+
+mkdir 'dest' 'src'
+mkdir 'dest/dir' 'src/dir'
+echo 'foo' > 'src/dir/file-0'
+echo 'bar' > 'src/dir/file-1'
+echo 'quux' > 'dest/dir/file-0'
+echo 'goz' > 'dest/dir/file-2'
+
+silk send -t 'dest' 'localhost:3200' 'src/dir'
+
+diff -Naur 'dest/dir/file-0' 'src/dir/file-0' && \
+diff -Naur 'dest/dir/file-1' 'src/dir/file-1' && \
+[ -e 'dest/dir/file-2' ]

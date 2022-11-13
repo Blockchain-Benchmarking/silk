@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+#   Is the correct prefix prepended to stderr when running on more than one
+#   server?
+#
+#   reproduce: issue #2
+#
+
+
+silk server --tcp=3200 --name='a' &
+silk server --tcp=3201 --name='b' &
+
+printf '#!/bin/bash\necho ok >&2\n' \
+    | silk run -L '(localhost:3200|localhost:3201)' - \
+    2> "observed"
+
+sort "observed" > "sorted"
+
+cat > "expected" <<EOF
+a :: ok
+b :: ok
+EOF
+
+diff -Naur "sorted" "expected"

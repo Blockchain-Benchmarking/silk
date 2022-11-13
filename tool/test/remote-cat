@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+#   Can a client send information to the remote server and back?
+#
+
+
+silk server --tcp=3200 &
+
+silk run 'localhost:3200' cat -A > "observed" <<EOF
+a	x
+b c
+EOF
+
+cat > "expected" <<EOF
+a^Ix$
+b c$
+EOF
+
+diff -Naur "observed" "expected"

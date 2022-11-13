@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+#   Is a remote server able to convey information to the client?
+#
+
+
+silk server --tcp=3200 &
+
+touch 'a' 'b' 'observed'
+
+silk run 'localhost:3200' ls -1 > 'observed'
+
+cat > 'expected' <<EOF
+a
+b
+observed
+EOF
+
+diff -Naur 'observed' 'expected'
