@@ -1,0 +1,15 @@
+#!/bin/bash
+#
+#   Is a remote server able to list stored keys?
+#
+
+
+silk server --tcp=3200 &
+
+silk kv 'localhost:3200' a=foo b= c=bar
+
+silk kv 'localhost:3200' > 'observed'
+
+grep '^a$' 'observed' && \
+grep '^b$' 'observed' && \
+grep '^c$' 'observed'
