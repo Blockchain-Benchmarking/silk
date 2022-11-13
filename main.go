@@ -48,6 +48,8 @@ Usage: %s [-h | --help] [-l<path> | --log=<path>] [-v | --verbose[=<str>]]
 
 Available commands:
 
+  kv          List, get, set or delete key/value pairs on remote servers
+
   run         Run a command on remote servers
 
   send        Send files to remote servers
@@ -217,6 +219,8 @@ func main() {
 	}
 
 	switch command {
+	case "kv":
+		kvMain(cli, verbose)
 	case "run":
 		runMain(cli, verbose)
 	case "send":
