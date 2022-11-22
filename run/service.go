@@ -427,6 +427,8 @@ func (this *serviceProcess) transmit(proc Process) {
 				this.log.Warn("receive close notice for " +
 					"closed broadcast stdin")
 			} else {
+				this.log.Trace("receive close notice for " +
+					"broadcast stdin")
 				stdinBcast = false
 				if stdinUcast == false {
 					proc.CloseStdin()
@@ -438,6 +440,8 @@ func (this *serviceProcess) transmit(proc Process) {
 				this.log.Warn("receive close notice for " +
 					"closed unicast stdin")
 			} else {
+				this.log.Trace("receive close notice for " +
+					"unicast stdin")
 				stdinUcast = false
 				if stdinBcast == false {
 					proc.CloseStdin()
