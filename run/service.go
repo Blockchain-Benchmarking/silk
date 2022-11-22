@@ -332,16 +332,18 @@ func (this *serviceProcess) run() {
 		return
 	}
 
-	go this.transmit(proc)
+	go func () {
+		proc.Wait()
+		this.log.Trace("send job exit: %d",
+			this.log.Emph(1, proc.Exit()))
+		this.conn.Send() <- net.MessageProtocol{
+			M: &jobExit{ proc.Exit() },
+			P: protocol,
+		}
+	}()
 
-	proc.Wait()
+	this.transmit(proc)
 	sending.Wait()
-
-	this.log.Trace("send job exit: %d", this.log.Emph(1, proc.Exit()))
-	this.conn.Send() <- net.MessageProtocol{
-		M: &jobExit{ proc.Exit() },
-		P: protocol,
-	}
 }
 
 func (this *serviceProcess) receiveExecutable() error {
@@ -425,6 +427,8 @@ func (this *serviceProcess) transmit(proc Process) {
 				this.log.Warn("receive close notice for " +
 					"closed broadcast stdin")
 			} else {
+				this.log.Trace("receive close notice for " +
+					"broadcast stdin")
 				stdinBcast = false
 				if stdinUcast == false {
 					proc.CloseStdin()
@@ -436,6 +440,8 @@ func (this *serviceProcess) transmit(proc Process) {
 				this.log.Warn("receive close notice for " +
 					"closed unicast stdin")
 			} else {
+				this.log.Trace("receive close notice for " +
+					"unicast stdin")
 				stdinUcast = false
 				if stdinBcast == false {
 					proc.CloseStdin()
