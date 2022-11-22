@@ -332,16 +332,18 @@ func (this *serviceProcess) run() {
 		return
 	}
 
-	go this.transmit(proc)
+	go func () {
+		proc.Wait()
+		this.log.Trace("send job exit: %d",
+			this.log.Emph(1, proc.Exit()))
+		this.conn.Send() <- net.MessageProtocol{
+			M: &jobExit{ proc.Exit() },
+			P: protocol,
+		}
+	}()
 
-	proc.Wait()
+	this.transmit(proc)
 	sending.Wait()
-
-	this.log.Trace("send job exit: %d", this.log.Emph(1, proc.Exit()))
-	this.conn.Send() <- net.MessageProtocol{
-		M: &jobExit{ proc.Exit() },
-		P: protocol,
-	}
 }
 
 func (this *serviceProcess) receiveExecutable() error {
