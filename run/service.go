@@ -170,6 +170,10 @@ type JobTooManyKeysError struct {
 	Keys []kv.Key
 }
 
+type JobTooManyValuesError struct {
+	Values []kv.Value
+}
+
 type JobUnknownSignalError struct {
 	Signal os.Signal
 }
@@ -257,7 +261,7 @@ func (this *serviceProcess) run() {
 	this.log.Trace("send service name: %s",
 		this.log.Emph(0, this.parent.name))
 	this.conn.Send() <- net.MessageProtocol{
-		M: &serviceMeta{ this.parent.name },
+		M: &serviceMeta{ this.parent.name, []kv.Value{} },
 		P: protocol,
 	}
 
@@ -704,14 +708,42 @@ var protocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
 
 type serviceMeta struct {
 	name string
+	values []kv.Value
 }
 
 func (this *serviceMeta) Encode(sink sio.Sink) error {
-	return sink.WriteString8(this.name).Error()
+	var i int
+
+	if len(this.values) > MaxJobKeys {
+		return &JobTooManyValuesError{ this.values }
+	}
+
+	sink = sink.WriteString8(this.name).
+		WriteUint16(uint16(len(this.values)))
+
+	for i = range this.values {
+		sink = sink.WriteEncodable(this.values[i])
+	}
+
+	return sink.Error()
 }
 
 func (this *serviceMeta) Decode(source sio.Source) error {
-	return source.ReadString8(&this.name).Error()
+	var n uint16
+
+	return source.ReadString8(&this.name).
+		ReadUint16(&n).AndThen(func () error {
+			var i int
+
+			this.values = make([]kv.Value, n)
+
+			for i = range this.values {
+				this.values[i], source = kv.ReadValue(source)
+			}
+
+			return source.Error()
+		}).
+		Error()
 }
 
 
@@ -977,6 +1009,10 @@ func (this *JobTooManyEnvVariablesError) Error() string {
 
 func (this *JobTooManyKeysError) Error() string {
 	return fmt.Sprintf("job has too many keys: %d", len(this.Keys))
+}
+
+func (this *JobTooManyValuesError) Error() string {
+	return fmt.Sprintf("job has too many values: %d", len(this.Values))
 }
 
 func (this *JobInvalidEnvKeyError) Error() string {
