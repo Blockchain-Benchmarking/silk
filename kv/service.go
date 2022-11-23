@@ -319,8 +319,7 @@ func (this *Request) Decode(source sio.Source) error {
 		this.Get = make([]Key, n)
 
 		for i = range this.Get {
-			this.Get[i] = &key{}
-			source = source.ReadDecodable(this.Get[i])
+			this.Get[i], source = ReadKey(source)
 		}
 
 		return source.Error()
@@ -333,9 +332,8 @@ func (this *Request) Decode(source sio.Source) error {
 		this.Set = make(map[Key]Value, n)
 
 		for i = 0; i < int(n); i++ {
-			k = &key{}
-			source = source.ReadDecodable(k)
-			v, source = decodeValue(source)
+			k, source = ReadKey(source)
+			v, source = ReadValue(source)
 			this.Set[k] = v
 		}
 
@@ -381,7 +379,7 @@ func (this *Reply) Decode(source sio.Source) error {
 		this.Get = make([]Value, n)
 
 		for i = range this.Get {
-			this.Get[i], source = decodeValue(source)
+			this.Get[i], source = ReadValue(source)
 		}
 
 		return source.Error()
@@ -390,8 +388,7 @@ func (this *Reply) Decode(source sio.Source) error {
 		this.List = make([]Key, n)
 
 		for i = range this.List {
-			this.List[i] = &key{}
-			source = source.ReadDecodable(this.List[i])
+			this.List[i], source = ReadKey(source)
 		}
 
 		return source.Error()
