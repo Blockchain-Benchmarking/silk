@@ -98,6 +98,10 @@ type Message struct {
 	// If the process is to be launched in a shell then indicate a list of
 	// path to source before to execute the job.
 	sources []string
+
+	// The `kv.Key`s from which to get the corresponding `kv.Value`s before
+	// to run the process.
+	keys []kv.Key
 }
 
 
@@ -120,6 +124,8 @@ const MaxJobEnvValueLength = math.MaxUint16
 const MaxJobSources        = math.MaxUint16
 
 const MaxJobSourceLength   = math.MaxUint16
+
+const MaxJobKeys           = math.MaxUint16
 
 
 type JobInvalidEnvKeyError struct {
@@ -158,6 +164,10 @@ type JobPathTooLongError struct {
 
 type JobTooManyEnvVariablesError struct {
 	Env map[string]string
+}
+
+type JobTooManyKeysError struct {
+	Keys []kv.Key
 }
 
 type JobUnknownSignalError struct {
@@ -579,6 +589,10 @@ func (this *Message) check() error {
 		}
 	}
 
+	if len(this.keys) > MaxJobKeys {
+		return &JobTooManyKeysError{ this.keys }
+	}
+
 	return nil
 }
 
@@ -607,6 +621,12 @@ func (this *Message) Encode(sink sio.Sink) error {
 
 	for i = range this.sources {
 		sink = sink.WriteString16(this.sources[i])
+	}
+
+	sink = sink.WriteUint16(uint16(len(this.keys)))
+
+	for i = range this.keys {
+		sink = sink.WriteEncodable(this.keys[i])
 	}
 
 	return sink.Error()
@@ -645,6 +665,15 @@ func (this *Message) Decode(source sio.Source) error {
 
 			for i = range this.sources {
 				source = source.ReadString16(&this.sources[i])
+			}
+
+			return source.Error()
+		}).
+		ReadUint16(&n).AndThen(func () error {
+			this.keys = make([]kv.Key, n)
+
+			for i = range this.keys {
+				this.keys[i], source = kv.ReadKey(source)
 			}
 
 			return source.Error()
@@ -944,6 +973,10 @@ func (this *UnknownMessageError) Error() string {
 func (this *JobTooManyEnvVariablesError) Error() string {
 	return fmt.Sprintf("job has too many environment variables: %d",
 		len(this.Env))
+}
+
+func (this *JobTooManyKeysError) Error() string {
+	return fmt.Sprintf("job has too many keys: %d", len(this.Keys))
 }
 
 func (this *JobInvalidEnvKeyError) Error() string {
