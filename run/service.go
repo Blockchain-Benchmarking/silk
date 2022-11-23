@@ -247,7 +247,7 @@ func (this *serviceProcess) run() {
 	this.log.Trace("send service name: %s",
 		this.log.Emph(0, this.parent.name))
 	this.conn.Send() <- net.MessageProtocol{
-		M: &serviceName{ this.parent.name },
+		M: &serviceMeta{ this.parent.name },
 		P: protocol,
 	}
 
@@ -657,7 +657,7 @@ func (this *Message) Decode(source sio.Source) error {
 
 
 var protocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
-	  0: &serviceName{},
+	  0: &serviceMeta{},
 	  1: &serviceExecutableData{},
 	  2: &serviceExecutableDone{},
 
@@ -673,15 +673,15 @@ var protocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
 })
 
 
-type serviceName struct {
+type serviceMeta struct {
 	name string
 }
 
-func (this *serviceName) Encode(sink sio.Sink) error {
+func (this *serviceMeta) Encode(sink sio.Sink) error {
 	return sink.WriteString8(this.name).Error()
 }
 
-func (this *serviceName) Decode(source sio.Source) error {
+func (this *serviceMeta) Decode(source sio.Source) error {
 	return source.ReadString8(&this.name).Error()
 }
 

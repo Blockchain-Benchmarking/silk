@@ -334,7 +334,7 @@ func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitG
 	}
 
 	switch m := msg.(type) {
-	case *serviceName:
+	case *serviceMeta:
 		log.Trace("receive service name: %s", log.Emph(0, m.name))
 		running.Add(1)
 
