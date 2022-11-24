@@ -332,6 +332,7 @@ func (this *serviceProcess) run() {
 		return
 	}
 
+	sending.Add(1)
 	go func () {
 		proc.Wait()
 		this.log.Trace("send job exit: %d",
@@ -340,6 +341,7 @@ func (this *serviceProcess) run() {
 			M: &jobExit{ proc.Exit() },
 			P: protocol,
 		}
+		sending.Done()
 	}()
 
 	this.transmit(proc)
