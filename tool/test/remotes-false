@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#   Does the client exit with failure if at least one remote processe fails?
+#
+
+
+silk server --tcp=3200 &
+silk server --tcp=3201 &
+
+silk kv 'localhost:3200' val=0
+silk kv 'localhost:3201' val=1
+
+silk run '(localhost:3200|localhost:3201)' test '%{val}' -eq 0
+ret=$?
+
+test ${ret} -ne 0
