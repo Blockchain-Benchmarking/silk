@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	sio "silk/io"
+	"silk/kv"
 	"silk/net"
 	"sync"
 	"syscall"
@@ -59,6 +60,10 @@ type JobOptions struct {
 	// Add or override the remote `Process` environment with the variables
 	// defined in this map.
 	Env map[string]string
+
+	// Get the `kv.Value`s associated to the specified `kv.Key`s from each
+	// remote server and make them available in each accepted `Agent`.
+	Keys []kv.Key
 
 	// If not `nil` then ignore the `name` argument of `NewJobWith` and
 	// transfer what is `Read` from this parameter to the remote servers
@@ -179,6 +184,7 @@ func newJob(name string, args []string, route net.Route, p net.Protocol, opts *J
 	m.args = args
 	m.cwd = opts.Cwd
 	m.env = opts.Env
+	m.keys = opts.Keys
 
 	if opts.Shell.shell() == false {
 		m.shell = shellNone
@@ -216,7 +222,7 @@ func (this *job) initiate(m *Message, p net.Protocol, opts *JobOptions) {
 		this.sendExecutable(opts.LocalExec)
 	}
 
-	go this.run()
+	go this.run(opts.Keys)
 
 	transmitting.Add(2)
 
@@ -249,7 +255,7 @@ func (this *job) sendExecutable(localExec io.ReadCloser) {
 	localExec.Close()
 }
 
-func (this *job) run() {
+func (this *job) run(keys []kv.Key) {
 	var accepting sync.WaitGroup
 	var running sync.WaitGroup
 	var conn net.Connection
@@ -263,7 +269,7 @@ func (this *job) run() {
 		log.Trace("open")
 
 		accepting.Add(1)
-		go this.handleAgent(conn, &accepting, &running, log)
+		go this.handleAgent(keys, conn, &accepting, &running, log)
 
 		i += 1
 	}
@@ -319,7 +325,7 @@ func (this *job) transmitStdin(transmitting *sync.WaitGroup) {
 	transmitting.Done()
 }
 
-func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitGroup, log sio.Logger) {
+func (this *job) handleAgent(keys []kv.Key, conn net.Connection, accepting, running *sync.WaitGroup, log sio.Logger) {
 	var msg net.Message
 	var agent Agent
 	var more bool
@@ -335,10 +341,11 @@ func (this *job) handleAgent(conn net.Connection, accepting, running *sync.WaitG
 
 	switch m := msg.(type) {
 	case *serviceMeta:
-		log.Trace("receive service name: %s", log.Emph(0, m.name))
+		log.Trace("receive metadata")
 		running.Add(1)
 
-		agent = newAgent(m.name, conn, running, log)
+		agent = newAgent(kv.NewTableFrom(keys, m.values), m.name, conn,
+			running, log)
 
 		if this.agentSignal == false {
 			close(agent.Signal())

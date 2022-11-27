@@ -2,7 +2,6 @@ package kv
 
 
 import (
-	"fmt"
 	"math"
 	sio "silk/io"
 	"silk/net"
@@ -14,9 +13,9 @@ import (
 
 
 type Service interface {
-	Formatter
-
 	Handle(*Request, net.Connection)
+
+	Table
 }
 
 
@@ -39,14 +38,6 @@ func NewServiceWith(opts *ServiceOptions) Service {
 
 	return newService(opts)
 }
-
-
-type Formatter interface {
-	Format(string) (string, error)
-}
-
-
-var Verbatim Formatter = &verbatim{}
 
 
 type Request struct {
@@ -88,15 +79,6 @@ const MaxPair = math.MaxUint16
 type TooManyPairsError struct {
 }
 
-type InvalidFormatError struct {
-	Fmt string
-	Pos int
-}
-
-type UnknownKeyError struct {
-	Key Key
-}
-
 
 // ----------------------------------------------------------------------------
 
@@ -104,14 +86,14 @@ type UnknownKeyError struct {
 type service struct {
 	log sio.Logger
 	lock sync.Mutex
-	kvs map[string]Value
+	table Table
 }
 
 func newService(opts *ServiceOptions) *service {
 	var this service
 
 	this.log = opts.Log
-	this.kvs = make(map[string]Value)
+	this.table = NewTable()
 
 	return &this
 }
@@ -144,131 +126,94 @@ func (this *service) Handle(request *Request, conn net.Connection) {
 	close(conn.Send())
 }
 
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *service) set(key Key, value Value) Value {
+	if value == NoValue {
+		this.log.Trace("delete %v", this.log.Emph(0, key))
+		return this.table.Set(key, value)
+	} else {
+		this.log.Trace("set %v = %v", this.log.Emph(0, key),
+			this.log.Emph(0, value))
+		return this.table.Set(key, value)
+	}
+}
+
+func (this *service) Set(key Key, value Value) Value {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+	return this.set(key, value)
+}
+
 func (this *service) handleSet(set map[Key]Value, reply *Reply) {
 	var value Value
 	var key Key
 
 	for key, value = range set {
-		if value == NoValue {
-			this.log.Trace("delete %s",
-				this.log.Emph(0, key.String()))
-			delete(this.kvs, key.String())
-		} else {
-			this.log.Trace("set %s = %s",
-				this.log.Emph(0, key.String()),
-				this.log.Emph(0, value.String()))
-			this.kvs[key.String()] = value
-		}
-	}
-}
-
-func (this *service) handleGet(get []Key, reply *Reply) {
-	var value Value
-	var found bool
-	var i int
-
-	reply.Get = make([]Value, len(get))
-
-	for i = range get {
-		value, found = this.kvs[get[i].String()]
-
-		if found {
-			this.log.Trace("get %s = %s",
-				this.log.Emph(0, get[i].String()),
-				this.log.Emph(0, value.String()))
-			reply.Get[i] = value
-		} else {
-			this.log.Trace("get %s has no value",
-				this.log.Emph(0, get[i].String()))
-			reply.Get[i] = NoValue
-		}
-	}
-}
-
-func (this *service) handleList(reply *Reply) {
-	var keyName string
-	var i int
-
-	reply.List = make([]Key, len(this.kvs))
-
-	i = 0
-	for keyName = range this.kvs {
-		this.log.Trace("list %s", this.log.Emph(0, keyName))
-		reply.List[i] = &key{ keyName }
-		i += 1
+		this.set(key, value)
 	}
 }
 
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
-func (this *service) Format(str string) (string, error) {
-        var start, pos int
-        var percent bool
-	var value Value
-        var ret string
-	var found bool
-	var err error
+func (this *service) get(key Key) Value {
+	var ret Value = this.table.Get(key)
+
+	if ret == NoValue {
+		this.log.Trace("get %v has no value", this.log.Emph(0, key))
+	} else {
+		this.log.Trace("get %v = %v", this.log.Emph(0, key),
+			this.log.Emph(0, ret))
+	}
+
+	return ret
+}
+
+func (this *service) Get(key Key) Value {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+	return this.get(key)
+}
+
+func (this *service) handleGet(keys []Key, reply *Reply) {
+	var i int
+
+	reply.Get = make([]Value, len(keys))
+
+	for i = range keys {
+		reply.Get[i] = this.get(keys[i])
+	}
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *service) list() []Key {
+	var ret []Key = this.table.List()
 	var key Key
-        var r rune
 
-	percent = false
-	start = -1
-	ret = ""
+	for _, key = range ret {
+		this.log.Trace("list %v", this.log.Emph(0, key))
+	}
 
-        for pos, r = range str {
-                if start >= 0 {
-                        if r == '}' {
-				key, err = NewKey(str[start:pos])
-				if err != nil {
-					return "", err
-				}
-
-				this.lock.Lock()
-				value, found = this.kvs[key.String()]
-				this.lock.Unlock()
-
-				if found == false {
-					return "", &UnknownKeyError{ key }
-				}
-
-                                ret += value.String()
-				start = -1
-                        }
-                        continue
-                }
-
-                if percent {
-			if r == '%' {
-				ret += "%"
-			} else if r == '{' {
-				start = pos + 1
-			} else {
-				return "", &InvalidFormatError{ str, pos }
-                        }
-
-                        percent = false
-                        continue
-                }
-
-                if r == '%' {
-                        percent = true
-                } else {
-                        ret += string(r)
-                }
-        }
-
-        return ret, nil
+	return ret
 }
 
-
-//  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-
-type verbatim struct {
+func (this *service) List() []Key {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+	return this.list()
 }
 
-func (this *verbatim) Format(str string) (string, error) {
-	return str, nil
+func (this *service) handleList(reply *Reply) {
+	reply.List = this.list()
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+func (this *service) Snapshot() View {
+	this.lock.Lock()
+	defer this.lock.Unlock()
+	return this.table.Snapshot()
 }
 
 
@@ -402,12 +347,4 @@ func (this *Reply) Decode(source sio.Source) error {
 
 func (this *TooManyPairsError) Error() string {
 	return "too many key/value pairs"
-}
-
-func (this *InvalidFormatError) Error() string {
-	return fmt.Sprintf("invalid format: %s", this.Fmt)
-}
-
-func (this *UnknownKeyError) Error() string{
-	return fmt.Sprintf("unknown key: %s", this.Key)
 }

@@ -27,11 +27,11 @@ type Service interface {
 }
 
 type ServiceOptions struct {
-	Kv kv.Formatter
-
 	Log sio.Logger
 
 	Name string
+
+	View kv.View
 }
 
 func NewService() (Service, error) {
@@ -46,8 +46,8 @@ func NewServiceWith(opts *ServiceOptions) (Service, error) {
 		opts = &ServiceOptions{}
 	}
 
-	if opts.Kv == nil {
-		opts.Kv = kv.Verbatim
+	if opts.View == nil {
+		opts.View = kv.NewTable()
 	}
 
 	if opts.Log == nil {
@@ -197,7 +197,7 @@ type UnknownMessageError struct {
 type service struct {
 	log sio.Logger
 	name string
-	kv kv.Formatter
+	view kv.View
 	nextId atomic.Uint64
 }
 
@@ -206,7 +206,7 @@ func newService(opts *ServiceOptions) *service {
 
 	this.log = opts.Log
 	this.name = opts.Name
-	this.kv = opts.Kv
+	this.view = opts.View
 	this.nextId.Store(0)
 
 	return &this
@@ -219,7 +219,7 @@ func (this *service) Handle(msg *Message, conn net.Connection) {
 	log.Trace("request: %s %v", log.Emph(0, msg.name),
 		log.Emph(0, msg.args))
 
-	newServiceProcess(this, msg, this.kv, conn, log).run()
+	newServiceProcess(this, msg, conn, log).run()
 
 	close(conn.Send())
 }
@@ -232,18 +232,16 @@ type serviceProcess struct {
 	parent *service
 	log sio.Logger
 	req *Message
-	kv kv.Formatter
 	conn net.Connection
 	tempExec *os.File
 }
 
-func newServiceProcess(parent *service, req *Message, kv kv.Formatter, conn net.Connection, log sio.Logger) *serviceProcess {
+func newServiceProcess(parent *service, req *Message, conn net.Connection, log sio.Logger) *serviceProcess {
 	var this serviceProcess
 
 	this.parent = parent
 	this.log = log
 	this.req = req
-	this.kv = kv
 	this.conn = conn
 	this.tempExec = nil
 
@@ -252,16 +250,28 @@ func newServiceProcess(parent *service, req *Message, kv kv.Formatter, conn net.
 
 func (this *serviceProcess) run() {
 	var sending sync.WaitGroup
+	var meta serviceMeta
 	var args []string
 	var proc Process
+	var view kv.View
 	var name string
 	var err error
 	var i int
 
-	this.log.Trace("send service name: %s",
-		this.log.Emph(0, this.parent.name))
+	view = this.parent.view.Snapshot()
+
+	meta.name = this.parent.name
+
+	meta.values = make([]kv.Value, len(this.req.keys))
+	for i = range this.req.keys {
+		meta.values[i] = view.Get(this.req.keys[i])
+	}
+
+	this.log.Trace("send service metadata: %s",
+		this.log.Emph(0, meta.name))
+
 	this.conn.Send() <- net.MessageProtocol{
-		M: &serviceMeta{ this.parent.name, []kv.Value{} },
+		M: &meta,
 		P: protocol,
 	}
 
@@ -280,14 +290,14 @@ func (this *serviceProcess) run() {
 		name = this.req.name
 	}
 
-	name, err = this.kv.Format(name)
+	name, err = kv.Format(view, name)
 	if err != nil {
 		this.log.Warn("%s", err.Error())
 		return
 	}
 
 	for i = range this.req.args {
-		this.req.args[i], err = this.kv.Format(this.req.args[i])
+		this.req.args[i], err = kv.Format(view, this.req.args[i])
 		if err != nil {
 			this.log.Warn("%s", err.Error())
 			return
