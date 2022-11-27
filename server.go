@@ -145,7 +145,7 @@ func serverStart(port int, name string, log sio.Logger) {
 		})
 
 	runService, err = run.NewServiceWith(&run.ServiceOptions{
-		Kv: kvService,
+		View: kvService,
 		Log: log.WithLocalContext("run"),
 		Name: name,
 	})

@@ -13,13 +13,16 @@ import (
 
 
 type Key interface {
-	sio.Decodable
 	sio.Encodable
 	String() string
 }
 
 func NewKey(str string) (Key, error) {
 	return newKey(str)
+}
+
+func ReadKey(source sio.Source) (Key, sio.Source) {
+	return readKey(source)
 }
 
 
@@ -30,6 +33,10 @@ type Value interface {
 
 func NewValue(str string) (Value, error) {
 	return newValue(str)
+}
+
+func ReadValue(source sio.Source) (Value, sio.Source) {
+	return readValue(source)
 }
 
 
@@ -77,8 +84,17 @@ func (this *key) Encode(sink sio.Sink) error {
 	return sink.WriteString8(this.name).Error()
 }
 
-func (this *key) Decode(source sio.Source) error {
-	return source.ReadString8(&this.name).Error()
+func readKey(source sio.Source) (*key, sio.Source) {
+	var name string
+	var ret *key
+
+	source = source.ReadString8(&name).AndThen(func () error {
+		var err error
+		ret, err = newKey(name)
+		return err
+	})
+
+	return ret, source
 }
 
 
@@ -115,7 +131,7 @@ func (this *value) Encode(sink sio.Sink) error {
 	}
 }
 
-func decodeValue(source sio.Source) (Value, sio.Source) {
+func readValue(source sio.Source) (Value, sio.Source) {
 	var has uint8
 	var ret Value
 
