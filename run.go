@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	sio "silk/io"
+	"silk/kv"
 	"silk/net"
 	"silk/run"
 	"silk/ui"
@@ -17,6 +18,8 @@ import (
 
 
 const SILK_CWD_NAME = "SILK_CWD"
+
+const SILK_PREFIX_NAME = "SILK_PREFIX"
 
 const SILK_SHELL_NAME = "SILK_SHELL"
 
@@ -75,6 +78,9 @@ Environment:
   %-20s        Set the current directory to its value on the
                               remote server before to run the command.
 
+  %-20s        Use the its value as a formatting string for stderr/stdout
+                              prefix.
+
   %-20s        Launch the remote command in a shell with login files sourced.
 
 
@@ -87,8 +93,9 @@ Printing:
 
   prefix[=<fmt>]              Prefix each line by the given <fmt> format string
                               where '%%n' is interpreted as the remote server
-                              name. If not specified, <fmt> is '%%n :: '. This
-                              is the default when there are more than one
+                              name. If not specified, <fmt> is the value of
+                              %s or '%%n :: '.
+                              This is the default when there are more than one
                               remote process.
 
   file=<fmt>                  Print the stream of each remote process in a
@@ -96,7 +103,7 @@ Printing:
                               format string where '%%n' is interpreted as the
                               remote server name.
 
-`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME, SILK_SHELL_NAME)
+`, os.Args[0], SILK_CWD_NAME, SILK_CWD_NAME, SILK_PREFIX_NAME, SILK_SHELL_NAME)
 
 	os.Exit(0)
 }
@@ -137,6 +144,8 @@ func doRun(config *runConfig) {
 	var cwd, keyval string
 	var route net.Route
 	var agent run.Agent
+	var keys []kv.Key
+	var success bool
 	var job run.Job
 	var err error
 	var i, n int
@@ -196,6 +205,10 @@ func doRun(config *runConfig) {
 		}
 	}
 
+	keys = make([]kv.Key, 0)
+	keys = append(keys, config.stdout.value().keys()...)
+	keys = append(keys, config.stderr.value().keys()...)
+
 	setupRunSigmask()
 
 	resolver = net.NewGroupResolver(net.NewAggregatedTcpResolverWith(
@@ -208,6 +221,7 @@ func doRun(config *runConfig) {
 		&run.JobOptions{
 			Cwd: cwd,
 			Env: env,
+			Keys: keys,
 			Shell: shell,
 			LocalExec: localExec,
 			Log: config.log.WithLocalContext("job[%s]",
@@ -223,13 +237,6 @@ func doRun(config *runConfig) {
 			config.log.Emph(0, agent.Name()))
 
 		agents = append(agents, agent)
-
-		go func (agent run.Agent) {
-			<-agent.Wait()
-			config.log.Debug("agent %s exits with %d",
-				config.log.Emph(0, agent.Name()),
-				config.log.Emph(1, agent.Exit()))
-		}(agent)
 	}
 
 	stdoutPrinters = config.stdout.value().instances(agents, config.log)
@@ -256,6 +263,24 @@ func doRun(config *runConfig) {
 	<-job.Wait()
 
 	printing.Wait()
+
+	success = true
+
+	for _, agent = range agents {
+		<-agent.Wait()
+
+		if agent.Exit() != 0 {
+			config.log.Info("agent %s exits with %d",
+				config.log.Emph(0, agent.Name()),
+				config.log.Emph(1, agent.Exit()))
+
+			success = false
+		}
+	}
+
+	if success == false {
+		os.Exit(1)
+	}
 }
 
 
@@ -263,24 +288,39 @@ func doRun(config *runConfig) {
 
 
 type printerType interface {
+	keys() []kv.Key
 	instances(agents []run.Agent, log sio.Logger) []printer
 }
 
 func parsePrinterType(spec string, base io.Writer) (printerType, error) {
+	var envPrefix string
+	var ret printerType
+	var err error
+
 	if spec == "raw" {
 		return newRawPrinterType(base), nil
 	}
 
 	if spec == "prefix" {
-		spec = "prefix=%n "
+		envPrefix = os.Getenv(SILK_PREFIX_NAME)
+		if envPrefix == "" {
+			return newDefaultPrefixPrinterType(base), nil
+		}
+
+		ret, err = newPrefixPrinterType(base, envPrefix)
+		if err != nil {
+			return newDefaultPrefixPrinterType(base), nil
+		}
+
+		return ret, nil
 	}
 
 	if strings.HasPrefix(spec, "prefix=") {
-		return newPrefixPrinterType(base, spec[len("prefix="):]), nil
+		return newPrefixPrinterType(base, spec[len("prefix="):])
 	}
 
 	if strings.HasPrefix(spec, "file=") {
-		return newFilePrinterType(spec[len("file="):]), nil
+		return newFilePrinterType(spec[len("file="):])
 	}
 
 	return nil, &invalidPrinterType{ spec }
@@ -290,14 +330,31 @@ func parsePrinterType(spec string, base io.Writer) (printerType, error) {
 
 type defaultPrinterType struct {
 	base io.Writer
+	prefixInner printerType
 }
 
 func newDefaultPrinterType(base io.Writer) *defaultPrinterType {
 	var this defaultPrinterType
+	var envPrefix string
+	var err error
 
 	this.base = base
 
+	envPrefix = os.Getenv(SILK_PREFIX_NAME)
+	if envPrefix == "" {
+		this.prefixInner = newDefaultPrefixPrinterType(base)
+	} else {
+		this.prefixInner, err = newPrefixPrinterType(base, envPrefix)
+		if err != nil {
+			this.prefixInner = newDefaultPrefixPrinterType(base)
+		}
+	}
+
 	return &this
+}
+
+func (this *defaultPrinterType) keys() []kv.Key {
+	return this.prefixInner.keys()
 }
 
 func (this *defaultPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
@@ -305,8 +362,7 @@ func (this *defaultPrinterType) instances(agents []run.Agent, log sio.Logger) []
 		return newRawPrinterType(this.base).
 			instances(agents, log)
 	} else {
-		return newPrefixPrinterType(this.base, "%n :: ").
-			instances(agents, log)
+		return this.prefixInner.instances(agents, log)
 	}
 }
 
@@ -322,6 +378,10 @@ func newRawPrinterType(base io.Writer) *rawPrinterType {
 	this.base = base
 
 	return &this
+}
+
+func (this *rawPrinterType) keys() []kv.Key {
+	return make([]kv.Key, 0)
 }
 
 func (this *rawPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
@@ -340,16 +400,37 @@ func (this *rawPrinterType) instances(agents []run.Agent, log sio.Logger) []prin
 
 type prefixPrinterType struct {
 	base io.Writer
-	format string
+	expr kv.Expression
+	ekeys []kv.Key
 }
 
-func newPrefixPrinterType(base io.Writer, format string) *prefixPrinterType {
+func newPrefixPrinterType(base io.Writer, format string) (*prefixPrinterType, error) {
+	var tokens []kv.ExpressionToken
 	var this prefixPrinterType
+	var err error
+	var i int
 
 	this.base = base
-	this.format = format
 
-	return &this
+	this.expr, err = kv.ParseExpression(format)
+	if err != nil {
+		return nil, err
+	}
+
+	this.ekeys = make([]kv.Key, 0)
+	tokens = this.expr.Tokens()
+	for i = range tokens {
+		switch t := tokens[i].(type) {
+		case kv.ExpressionKeyToken:
+			this.ekeys = append(this.ekeys, t.Key())
+		}
+	}
+
+	return &this, nil
+}
+
+func (this *prefixPrinterType) keys() []kv.Key {
+	return this.ekeys
 }
 
 func (this *prefixPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
@@ -358,7 +439,39 @@ func (this *prefixPrinterType) instances(agents []run.Agent, log sio.Logger) []p
 	var i int
 
 	for i = range ret {
-		prefix = formatAgent(this.format, agents[i])
+		prefix = formatAgent(this.expr, agents[i], log)
+		ret[i] = newPrefixPrinter(this.base, prefix)
+	}
+
+	return ret
+}
+
+// -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+type defaultPrefixPrinterType struct {
+	base io.Writer
+}
+
+func newDefaultPrefixPrinterType(base io.Writer) *defaultPrefixPrinterType {
+	var this defaultPrefixPrinterType
+
+	this.base = base
+
+	return &this
+}
+
+
+func (this *defaultPrefixPrinterType) keys() []kv.Key {
+	return make([]kv.Key, 0)
+}
+
+func (this *defaultPrefixPrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
+	var ret []printer = make([]printer, len(agents))
+	var prefix string
+	var i int
+
+	for i = range ret {
+		prefix = formatDefaultAgent(agents[i])
 		ret[i] = newPrefixPrinter(this.base, prefix)
 	}
 
@@ -368,15 +481,35 @@ func (this *prefixPrinterType) instances(agents []run.Agent, log sio.Logger) []p
 // -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
 
 type filePrinterType struct {
-	format string
+	expr kv.Expression
+	ekeys []kv.Key
 }
 
-func newFilePrinterType(format string) *filePrinterType {
+func newFilePrinterType(format string) (*filePrinterType, error) {
+	var tokens []kv.ExpressionToken
 	var this filePrinterType
+	var err error
+	var i int
 
-	this.format = format
+	this.expr, err = kv.ParseExpression(format)
+	if err != nil {
+		return nil, err
+	}
 
-	return &this
+	this.ekeys = make([]kv.Key, 0)
+	tokens = this.expr.Tokens()
+	for i = range tokens {
+		switch t := tokens[i].(type) {
+		case kv.ExpressionKeyToken:
+			this.ekeys = append(this.ekeys, t.Key())
+		}
+	}
+
+	return &this, nil
+}
+
+func (this *filePrinterType) keys() []kv.Key {
+	return this.ekeys
 }
 
 func (this *filePrinterType) instances(agents []run.Agent, log sio.Logger) []printer {
@@ -387,7 +520,7 @@ func (this *filePrinterType) instances(agents []run.Agent, log sio.Logger) []pri
 	var i int
 
 	for i = range ret {
-		path = formatAgent(this.format, agents[i])
+		path = formatAgent(this.expr, agents[i], log)
 		file, err = os.Create(path)
 		if err != nil {
 			log.Warn("cannot create file %s: %s",
@@ -486,8 +619,37 @@ func (this *filePrinter) printChannel(c <-chan []byte) {
 //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-func formatAgent(format string, agent run.Agent) string {
-	return strings.ReplaceAll(format, "%n", agent.Name())
+func formatAgent(expr kv.Expression, agent run.Agent, log sio.Logger) string {
+	var tokens []kv.ExpressionToken
+	var ret, txt string
+	var err error
+	var i int
+
+	tokens = expr.Tokens()
+	for i = range tokens {
+		switch t := tokens[i].(type) {
+
+		case kv.ExpressionPlainToken:
+			txt = t.Plain()
+			txt = strings.ReplaceAll(txt, "%n", agent.Name())
+			ret += txt
+
+		default:
+			txt, err = tokens[i].Format(agent.Meta())
+			if err != nil {
+				log.Warn("formatting failure for agent %s: %s",
+					log.Emph(0, agent.Name()), err.Error())
+				return formatDefaultAgent(agent)
+			}
+			ret += txt
+		}
+	}
+
+	return ret
+}
+
+func formatDefaultAgent(agent run.Agent) string {
+	return fmt.Sprintf("%s :: ", agent.Name())
 }
 
 

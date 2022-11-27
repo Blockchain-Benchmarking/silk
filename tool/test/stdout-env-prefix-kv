@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+#   Is the correct default prefix prepended to stdout when running on more
+#   than one server?
+#
+
+
+silk server --tcp=3200 &
+silk server --tcp=3201 &
+
+silk kv 'localhost:3200' name='A' id=0
+silk kv 'localhost:3201' name='B' id=1
+
+export SILK_PREFIX='--%{name}-%{id}--'
+silk run '(localhost:3200|localhost:3201)' echo 'ok' > "observed"
+
+sort "observed" > "sorted"
+
+cat > "expected" <<EOF
+--A-0--ok
+--B-1--ok
+EOF
+
+diff -Naur "sorted" "expected"

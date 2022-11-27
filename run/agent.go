@@ -4,6 +4,7 @@ package run
 import (
 	"os"
 	sio "silk/io"
+	"silk/kv"
 	"silk/net"
 	"sync"
 	"sync/atomic"
@@ -15,6 +16,8 @@ import (
 
 
 type Agent interface {
+	Meta() kv.View
+
 	Name() string
 
 	Signal() chan<- os.Signal
@@ -36,6 +39,7 @@ type Agent interface {
 
 type agent struct {
 	log sio.Logger
+	meta kv.View
 	name string
 	conn net.Connection
 	signalc chan os.Signal
@@ -46,11 +50,12 @@ type agent struct {
 	exit atomic.Value
 }
 
-func newAgent(name string, conn net.Connection, running *sync.WaitGroup, log sio.Logger) *agent {
+func newAgent(meta kv.View, name string, conn net.Connection, running *sync.WaitGroup, log sio.Logger) *agent {
 	var this agent
 	var using sync.WaitGroup
 
 	this.log = log
+	this.meta = meta
 	this.name = name
 	this.conn = conn
 	this.signalc = make(chan os.Signal, 8)
@@ -78,7 +83,7 @@ func (this *agent) run(running, using *sync.WaitGroup) {
 	var msg net.Message
 	var exited bool
 
-	this.log.Debug("start %s", this.log.Emph(0, this.name))
+	this.log.Debug("start")
 
 	stdout = true
 	stderr = true
@@ -207,6 +212,10 @@ func (this *agent) transmitStdin(using *sync.WaitGroup) {
 	}
 
 	using.Done()
+}
+
+func (this *agent) Meta() kv.View {
+	return this.meta
 }
 
 func (this *agent) Name() string {

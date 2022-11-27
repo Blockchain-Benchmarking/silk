@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+#   Does the client exit with failure if the remote processes fails?
+#
+
+
+silk server --tcp=3200 &
+
+silk run 'localhost:3200' false
+ret=$?
+
+test ${ret} -ne 0
