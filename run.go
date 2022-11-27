@@ -145,6 +145,7 @@ func doRun(config *runConfig) {
 	var route net.Route
 	var agent run.Agent
 	var keys []kv.Key
+	var success bool
 	var job run.Job
 	var err error
 	var i, n int
@@ -236,13 +237,6 @@ func doRun(config *runConfig) {
 			config.log.Emph(0, agent.Name()))
 
 		agents = append(agents, agent)
-
-		go func (agent run.Agent) {
-			<-agent.Wait()
-			config.log.Debug("agent %s exits with %d",
-				config.log.Emph(0, agent.Name()),
-				config.log.Emph(1, agent.Exit()))
-		}(agent)
 	}
 
 	stdoutPrinters = config.stdout.value().instances(agents, config.log)
@@ -269,6 +263,24 @@ func doRun(config *runConfig) {
 	<-job.Wait()
 
 	printing.Wait()
+
+	success = true
+
+	for _, agent = range agents {
+		<-agent.Wait()
+
+		if agent.Exit() != 0 {
+			config.log.Info("agent %s exits with %d",
+				config.log.Emph(0, agent.Name()),
+				config.log.Emph(1, agent.Exit()))
+
+			success = false
+		}
+	}
+
+	if success == false {
+		os.Exit(1)
+	}
 }
 
 
