@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+#   Is the prefix falling back to default in the case of missing keys?
+#
+
+
+silk server --tcp=3200 --name='a' &
+silk server --tcp=3201 --name='b' &
+
+silk kv 'localhost:3200' name='A' id=0
+silk kv 'localhost:3201' name='B'
+
+silk run --stdout=prefix='--%{name}-%{id}--' \
+     '(localhost:3200|localhost:3201)' echo 'ok' > "observed"
+
+sort "observed" > "sorted"
+
+cat > "expected" <<EOF
+--A-0--ok
+b :: ok
+EOF
+
+diff -Naur "sorted" "expected"
