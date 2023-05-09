@@ -3,6 +3,7 @@ package net
 
 import (
 	"bytes"
+	"context"
 	sio "silk/io"
 	"silk/util/rand"
 	"sync"
@@ -19,6 +20,8 @@ type AggregationService interface {
 }
 
 type AggregationServiceOptions struct {
+	Context context.Context
+
 	Log sio.Logger
 }
 
@@ -93,6 +96,13 @@ func newAggregationService(opts *AggregationServiceOptions)*aggregationService{
 	this.log = opts.Log
 	this.reqc = make(chan *aggregationRequest)
 	this.acceptc = make(chan Connection, 16)
+
+	if opts.Context != nil {
+		go func () {
+			<-opts.Context.Done()
+			close(this.reqc)
+		}()
+	}
 
 	go this.run()
 
