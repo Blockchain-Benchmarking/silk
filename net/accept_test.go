@@ -2,6 +2,7 @@ package net
 
 
 import (
+	"go.uber.org/goleak"
 	"testing"
 )
 
@@ -50,6 +51,7 @@ func testCloseAccepter(t *testing.T, setupf func () *closeAccepterTestSetup) {
 func testAccepterCloseImmediately(t *testing.T, setup *closeAccepterTestSetup){
 	var more bool
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	setup.closef()
@@ -68,6 +70,7 @@ func testAccepterAsync(t *testing.T, setup *closeAccepterTestSetup) {
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ac = transmitConnections(setup.accepter.Accept(), len(cs))
@@ -107,6 +110,7 @@ func testAccepterAsyncN(t *testing.T, setup *accepterTestSetup) {
 	var as []Connection
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ac = transmitConnections(setup.accepter.Accept(), len(cs))
@@ -140,6 +144,7 @@ func testAccepterSync(t *testing.T, setup *accepterTestSetup) {
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	loop: for i = range cs {
