@@ -118,6 +118,8 @@ func testSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer setup.teardown()
+
 	in[70].encodingError = true
 
 	for i = range in {
@@ -133,8 +135,6 @@ func testSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	}
 
 	testMessageSetInclusive(in[:70], out, t)
-
-	setup.teardown()
 }
 
 func testSenderDecodingError(t *testing.T, setup *senderTestSetup) {
@@ -212,6 +212,8 @@ func testFifoSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer setup.teardown()
+
 	in[70].encodingError = true
 
 	for i = range in {
@@ -227,8 +229,6 @@ func testFifoSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	}
 
 	testMessagesEquality(in[:70], out, t)
-
-	setup.teardown()
 }
 
 func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {

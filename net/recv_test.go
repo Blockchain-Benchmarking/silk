@@ -125,6 +125,8 @@ func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer setup.teardown()
+
 	in[70].encodingError = true
 
 	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
@@ -142,8 +144,6 @@ func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	}
 
 	testMessageSetInclusive(in[:70], out, t)
-
-	setup.teardown()
 }
 
 func testReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
@@ -225,6 +225,8 @@ func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer setup.teardown()
+
 	in[70].encodingError = true
 
 	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
@@ -242,8 +244,6 @@ func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	}
 
 	testMessagesEquality(in[:70], out, t)
-
-	setup.teardown()
 }
 
 func testFifoReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
