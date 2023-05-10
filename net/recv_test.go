@@ -4,6 +4,7 @@ package net
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 
@@ -38,12 +39,17 @@ func testReceiver(t *testing.T, setupf func () *receiverTestSetup) {
 }
 
 func testReceiverCloseImmediately(t *testing.T, setup *receiverTestSetup) {
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 
 	defer setup.teardown()
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(1))
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	close(setup.sendc)
 
@@ -59,13 +65,18 @@ func testReceiverCloseImmediately(t *testing.T, setup *receiverTestSetup) {
 
 func testReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
 	defer setup.teardown()
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
@@ -84,13 +95,17 @@ func testReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 
 func testReceiverSync(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
-	var over <-chan struct{} = timeout(100)
 	var out []Message = make([]Message, 0)
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var msg Message
 	var more bool
 	var i int
 
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 
 	loop: for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
@@ -103,7 +118,7 @@ func testReceiverSync(t *testing.T, setup *receiverTestSetup) {
 			} else {
 				out = append(out, msg)
 			}
-		case <-over:
+		case <-ctx.Done():
 			t.Errorf("timeout")
 			break loop
 		}
@@ -121,15 +136,20 @@ func testReceiverSync(t *testing.T, setup *receiverTestSetup) {
 
 func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
 	defer setup.teardown()
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	in[70].encodingError = true
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
@@ -148,15 +168,20 @@ func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 
 func testReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
 	defer setup.teardown()
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	in[70].decodingError = true
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
@@ -196,13 +221,18 @@ func testFifoReceiver(t *testing.T, setupf func () *receiverTestSetup) {
 
 func testFifoReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
 	defer setup.teardown()
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
@@ -221,15 +251,20 @@ func testFifoReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 
 func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
 	defer setup.teardown()
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	in[70].encodingError = true
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
@@ -248,15 +283,20 @@ func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 
 func testFifoReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
 	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
 	defer setup.teardown()
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	in[70].decodingError = true
 
-	outc = gatherMessages(setup.receiver.Recv(mockProtocol), timeout(100))
+	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
 
 	for i = range in {
 		setup.sendc <- MessageProtocol{in[i], mockProtocol}
