@@ -28,8 +28,25 @@ func NewPiecewiseConnection(sender Sender, receiver Receiver) Connection {
 	return newPiecewiseConnection(sender, receiver)
 }
 
+
 func NewTcpConnection(addr string) Connection {
-	return dialTcpConnection(addr)
+	return NewTcpConnectionWith(addr, nil)
+}
+
+func NewTcpConnectionWith(addr string, opts *TcpConnectionOptions) Connection {
+	if opts == nil {
+		opts = &TcpConnectionOptions{}
+	}
+
+	if opts.ConnectionContext == nil {
+		opts.ConnectionContext = context.Background()
+	}
+
+	return dialTcpConnection(addr, opts)
+}
+
+type TcpConnectionOptions struct {
+	ConnectionContext context.Context
 }
 
 
@@ -193,23 +210,23 @@ func newTcpConnection(conn net.Conn) *tcpConnection {
 	return &this
 }
 
-func dialTcpConnection(addr string) *tcpConnection {
+func dialTcpConnection(addr string, opts *TcpConnectionOptions) *tcpConnection{
 	var this tcpConnection
 
 	this.cond = sync.NewCond(&this.lock)
 	this.ready = false
 	this.sendc = make(chan MessageProtocol, 32)
 
-	go this.dial(addr)
+	go this.dial(addr, opts.ConnectionContext)
 
 	return &this
 }
 
-func (this *tcpConnection) dial(addr string) {
+func (this *tcpConnection) dial(addr string, ctx context.Context) {
 	var dialer net.Dialer
 	var conn net.Conn
 
-	conn, _ = dialer.DialContext(context.Background(), "tcp", addr)
+	conn, _ = dialer.DialContext(ctx, "tcp", addr)
 
 	this.lock.Lock()
 
