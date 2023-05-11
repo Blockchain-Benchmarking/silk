@@ -3,6 +3,7 @@ package net
 
 import (
 	"context"
+	"go.uber.org/goleak"
 	"testing"
 )
 
@@ -67,6 +68,8 @@ func TestTcpConnectionEmptyAddr(t *testing.T) {
 	var c Connection
 	var more bool
 
+	defer goleak.VerifyNone(t)
+
 	c = NewTcpConnection("")
 
 	c.Send() <- MessageProtocol{ &mockMessage{}, mockProtocol }
@@ -88,6 +91,8 @@ func TestTcpConnectionUnreachable(t *testing.T) {
 	var c Connection
 	var more bool
 
+	defer goleak.VerifyNone(t)
+
 	c = NewTcpConnection(findTcpAddr(t))
 
 	c.Send() <- MessageProtocol{ &mockMessage{}, mockProtocol }
@@ -107,6 +112,8 @@ func TestTcpConnectionUnreachable(t *testing.T) {
 
 func TestTcpConnectionUnresolvable(t *testing.T) {
 	var c Connection
+
+	defer goleak.VerifyNone(t)
 
 	c = NewTcpConnection(findUnresolvableAddr(t))
 
