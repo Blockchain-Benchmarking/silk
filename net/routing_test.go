@@ -4,6 +4,7 @@ package net
 import (
 	"context"
 	"fmt"
+	"go.uber.org/goleak"
 	"testing"
 )
 
@@ -61,9 +62,14 @@ func serveTerminal(ctx context.Context, addr string, connc chan<- Connection) {
 
 
 func TestRouteEmpty(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
-	var r Route = NewRoute([]string{}, res)
+	var res Resolver
 	var more bool
+	var r Route
+
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
+	r = NewRoute([]string{}, res)
 
 	_, more = <-r.Accept()
 	if more {
@@ -74,9 +80,14 @@ func TestRouteEmpty(t *testing.T) {
 }
 
 func TestRouteShortInvalid(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
-	var r Route = NewRoute([]string{ "Hello World!" }, res)
+	var res Resolver
 	var more bool
+	var r Route
+
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
+	r = NewRoute([]string{ "Hello World!" }, res)
 
 	_, more = <-r.Accept()
 	if more {
@@ -87,10 +98,15 @@ func TestRouteShortInvalid(t *testing.T) {
 }
 
 func TestRouteShortUnreachable(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
-	var r Route = NewRoute([]string{ findTcpAddr(t) }, res)
+	var res Resolver
 	var c Connection
 	var more bool
+	var r Route
+
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
+	r = NewRoute([]string{ findTcpAddr(t) }, res)
 
 	defer close(r.Send())
 
@@ -108,10 +124,15 @@ func TestRouteShortUnreachable(t *testing.T) {
 }
 
 func TestRouteShortUnresolvable(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
-	var r Route = NewRoute([]string{ findUnresolvableAddr(t) }, res)
+	var res Resolver
 	var c Connection
 	var more bool
+	var r Route
+
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
+	r = NewRoute([]string{ findUnresolvableAddr(t) }, res)
 
 	defer close(r.Send())
 
@@ -150,15 +171,21 @@ func TestRouteShort(t *testing.T) {
 
 
 func TestRouteLongInvalid(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
-	var port uint16 = findTcpPort(t)
 	var cancel context.CancelFunc
 	var ctx context.Context
+	var res Resolver
+	var port uint16
 	var more bool
 	var r Route
 
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
+
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
+
+	port = findTcpPort(t)
 	serveRelay(ctx, fmt.Sprintf(":%d", port), res)
 
 	r = NewRoute([]string{
@@ -175,13 +202,17 @@ func TestRouteLongInvalid(t *testing.T) {
 }
 
 func TestRouteLongUnreachable(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
 	var cancel context.CancelFunc
 	var ctx context.Context
 	var p0, p1 uint16
 	var c Connection
+	var res Resolver
 	var more bool
 	var r Route
+
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
@@ -211,13 +242,18 @@ func TestRouteLongUnreachable(t *testing.T) {
 }
 
 func TestRouteLongUnresolvable(t *testing.T) {
-	var res Resolver = NewTcpResolver(mockProtocol)
-	var port uint16 = findTcpPort(t)
 	var cancel context.CancelFunc
 	var ctx context.Context
 	var c Connection
+	var res Resolver
+	var port uint16
 	var more bool
 	var r Route
+
+	defer goleak.VerifyNone(t)
+
+	res = NewTcpResolver(mockProtocol)
+	port = findTcpPort(t)
 
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
