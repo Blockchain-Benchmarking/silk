@@ -7,6 +7,7 @@ import (
 	sio "silk/io"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -29,6 +30,8 @@ type TcpResolverOptions struct {
 	Log sio.Logger
 
 	ConnectionContext context.Context
+
+	ConnectionTimeout time.Duration
 }
 
 func NewTcpResolver(proto Protocol) Resolver {
@@ -87,6 +90,7 @@ type ResolverInvalidNameError struct {
 type tcpResolver struct {
 	log sio.Logger
 	ctx context.Context
+	timeout time.Duration
 	proto Protocol
 }
 
@@ -95,6 +99,7 @@ func newTcpResolver(proto Protocol, opts *TcpResolverOptions) *tcpResolver {
 
 	this.log = opts.Log
 	this.ctx = opts.ConnectionContext
+	this.timeout = opts.ConnectionTimeout
 	this.proto = proto
 
 	return &this
@@ -112,6 +117,7 @@ func (this *tcpResolver) Resolve(name string) ([]Route, []Protocol, error) {
 
 	ret = NewUnitLeafRoute(NewTcpConnectionWith(name,&TcpConnectionOptions{
 		ConnectionContext: this.ctx,
+		ConnectionTimeout: this.timeout,
 	}))
 
 	return []Route{ ret }, []Protocol{ this.proto }, nil
