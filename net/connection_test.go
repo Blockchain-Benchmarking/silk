@@ -5,6 +5,7 @@ import (
 	"context"
 	"go.uber.org/goleak"
 	"testing"
+	"time"
 )
 
 
@@ -111,11 +112,18 @@ func TestTcpConnectionUnreachable(t *testing.T) {
 }
 
 func TestTcpConnectionUnresolvable(t *testing.T) {
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var c Connection
 
 	defer goleak.VerifyNone(t)
 
-	c = NewTcpConnection(findUnresolvableAddr(t))
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	c = NewTcpConnectionWith(findUnresolvableAddr(t),&TcpConnectionOptions{
+		ConnectionContext: ctx,
+	})
 
 	close(c.Send())
 }
