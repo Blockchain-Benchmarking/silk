@@ -6,6 +6,7 @@ import (
 	"context"
 	"net"
 	sio "silk/io"
+	"time"
 	"sync"
 )
 
@@ -47,6 +48,8 @@ func NewTcpConnectionWith(addr string, opts *TcpConnectionOptions) Connection {
 
 type TcpConnectionOptions struct {
 	ConnectionContext context.Context
+
+	ConnectionTimeout time.Duration
 }
 
 
@@ -217,16 +220,28 @@ func dialTcpConnection(addr string, opts *TcpConnectionOptions) *tcpConnection{
 	this.ready = false
 	this.sendc = make(chan MessageProtocol, 32)
 
-	go this.dial(addr, opts.ConnectionContext)
+	go this.dial(addr, opts)
 
 	return &this
 }
 
-func (this *tcpConnection) dial(addr string, ctx context.Context) {
+func (this *tcpConnection) dial(addr string, opts *TcpConnectionOptions) {
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var dialer net.Dialer
 	var conn net.Conn
 
+	ctx = opts.ConnectionContext
+
+	if opts.ConnectionTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, opts.ConnectionTimeout)
+	} else {
+		cancel = func () {}
+	}
+
 	conn, _ = dialer.DialContext(ctx, "tcp", addr)
+
+	cancel()
 
 	this.lock.Lock()
 
