@@ -172,6 +172,8 @@ func TestTcpResolverUnreachable(t *testing.T) {
 }
 
 func TestTcpResolverUnresolvableAddr(t *testing.T) {
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var ps []Protocol
 	var c Connection
 	var rs []Route
@@ -181,7 +183,12 @@ func TestTcpResolverUnresolvableAddr(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	r = NewTcpResolver(mockProtocol)
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	r = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
+		ConnectionContext: ctx,
+	})
 
 	rs, ps, err = r.Resolve(findUnresolvableAddr(t))
 
