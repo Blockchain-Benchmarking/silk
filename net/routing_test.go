@@ -273,11 +273,14 @@ func TestRouteLongUnresolvable(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	res = NewTcpResolver(mockProtocol)
-	port = findTcpPort(t)
-
 	ctx, cancel = context.WithCancel(context.Background())
 	defer cancel()
+
+	res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
+		ConnectionContext: ctx,
+	})
+	port = findTcpPort(t)
+
 	serveRelay(ctx, fmt.Sprintf(":%d", port), res)
 
 	r = NewRoute([]string{
@@ -298,13 +301,17 @@ func TestRouteLongUnresolvable(t *testing.T) {
 func TestRouteLong(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
 		var connc chan Connection = make(chan Connection)
-		var res Resolver = NewTcpResolver(mockProtocol)
 		var cancel context.CancelFunc
 		var ctx context.Context
 		var p0, p1 uint16
+		var res Resolver
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
+
+		res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
+			ConnectionContext: ctx,
+		})
 
 		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
