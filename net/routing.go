@@ -380,6 +380,7 @@ func (this *relay) run() {
 }
 
 func (this *relay) accept() {
+	var transferring sync.WaitGroup
 	var conn Connection
 	var id uint16
 
@@ -395,7 +396,8 @@ func (this *relay) accept() {
 			P: routingProtocol,
 		}
 
-		go this.backward(conn, id)
+		transferring.Add(1)
+		go this.backward(conn, id, &transferring)
 	}
 
 	this.log.Trace("relay back end of accept")
@@ -403,9 +405,13 @@ func (this *relay) accept() {
 		M: &routingAccepted{},
 		P: routingProtocol,
 	}
+
+	transferring.Wait()
+
+	close(this.origin.Send())
 }
 
-func (this *relay) backward(conn Connection, id uint16) {
+func (this *relay) backward(conn Connection, id uint16, txwg *sync.WaitGroup) {
 	var msg Message
 
 	for msg = range conn.Recv(routingProtocol) {
@@ -428,6 +434,8 @@ func (this *relay) backward(conn Connection, id uint16) {
 		M: &routingIdClose{ id },
 		P: routingProtocol,
 	}
+
+	txwg.Done()
 }
 
 func (this *relay) forward() {
