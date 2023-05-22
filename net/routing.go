@@ -446,10 +446,7 @@ func (this *relay) backward(conn Connection, id uint16, txwg *sync.WaitGroup) {
 
 func (this *relay) forward() {
 	var conn Connection
-	var closed bool
 	var msg Message
-
-	closed = false
 
 	for msg = range this.origin.Recv(routingProtocol) {
 		switch m := msg.(type) {
@@ -475,11 +472,6 @@ func (this *relay) forward() {
 			}
 
 		case *routingBroadcast:
-			if closed {
-				this.log.Warn("broadcast on closed route")
-				continue
-			}
-
 			this.log.Trace("relay forw %d bytes of broadcast",
 				len(m.content))
 			this.remote.Send() <- MessageProtocol{
