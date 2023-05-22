@@ -3,6 +3,7 @@ package net
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	sio "silk/io"
@@ -18,6 +19,10 @@ import (
 // A service to relay `Route` messages.
 //
 type RoutingService interface {
+	// Interface for `Accept()`ing incoming routed `Connection`s.
+	// The returned accept channel is closed when the `Context` of this
+	// service is done.
+	//
 	Accepter
 
 	// Handle a `RoutingMessage` coming from the given `Connection`.
@@ -25,11 +30,16 @@ type RoutingService interface {
 	// it.
 	// Return once the relayed `Route` is fully closed.
 	//
+	// Calling `Handle()` when this service has an associated `Context`
+	// that is done is undefined behavior.
+	//
 	Handle(*RoutingMessage, Connection)
 }
 
 
 type RoutingServiceOptions struct {
+	Context context.Context
+
 	Log sio.Logger
 }
 
@@ -119,6 +129,13 @@ func newRoutingService(r Resolver, o *RoutingServiceOptions) *routingService {
 	this.resolver = r
 	this.acceptc = make(chan Connection)
 	this.nextId.Store(0)
+
+	if o.Context != nil {
+		go func () {
+			<-o.Context.Done()
+			close(this.acceptc)
+		}()
+	}
 
 	return &this
 }
