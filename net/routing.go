@@ -361,6 +361,7 @@ type relay struct {
 	remote Route
 	lock sync.Mutex
 	conns []Connection
+	forwarding bool
 }
 
 func newRelay(origin Connection, remote Route, log sio.Logger) *relay {
@@ -370,6 +371,7 @@ func newRelay(origin Connection, remote Route, log sio.Logger) *relay {
 	this.origin = origin
 	this.remote = remote
 	this.conns = make([]Connection, 0)
+	this.forwarding = true
 
 	return &this
 }
@@ -386,8 +388,12 @@ func (this *relay) accept() {
 
 	for conn = range this.remote.Accept() {
 		this.lock.Lock()
-		id = uint16(len(this.conns))
-		this.conns = append(this.conns, conn)
+		if this.forwarding {
+			id = uint16(len(this.conns))
+			this.conns = append(this.conns, conn)
+		} else {
+			close(conn.Send())
+		}
 		this.lock.Unlock()
 
 		this.log.Trace("relay back accept as %d", this.log.Emph(1, id))
@@ -509,6 +515,16 @@ func (this *relay) forward() {
 	}
 
 	close(this.remote.Send())
+
+	this.lock.Lock()
+	this.forwarding = false
+	this.lock.Unlock()
+
+	for _, conn = range this.conns {
+		if conn != nil {
+			close(conn.Send())
+		}
+	}
 }
 
 
