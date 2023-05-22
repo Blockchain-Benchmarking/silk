@@ -49,7 +49,11 @@ func serveRelay(ctx context.Context, addr string, res Resolver) {
 }
 
 func serveTerminal(ctx context.Context, addr string, connc chan<- Connection) {
-	var rs RoutingService = NewRoutingService(nil)
+	var rs RoutingService
+
+	rs = NewRoutingServiceWith(nil, &RoutingServiceOptions{
+		Context: ctx,
+	})
 
 	go acceptConnections(rs, connc)
 
@@ -357,8 +361,8 @@ func TestRouteForkInvalid(t *testing.T) {
 
 func TestRouteFork(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
-		var connc chan Connection = make(chan Connection)
 		var res Resolver=NewGroupResolver(NewTcpResolver(mockProtocol))
+		var c0, c1 chan Connection
 		var cancel context.CancelFunc
 		var ctx context.Context
 		var p0, p1, p2 uint16
@@ -366,14 +370,17 @@ func TestRouteFork(t *testing.T) {
 
 		ctx, cancel = context.WithCancel(context.Background())
 
+		c0 = make(chan Connection)
+		c1 = make(chan Connection)
+
 		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
 
 		p1 = findTcpPort(t)
-		serveTerminal(ctx, fmt.Sprintf(":%d", p1), connc)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p1), c0)
 
 		p2 = findTcpPort(t)
-		serveTerminal(ctx, fmt.Sprintf(":%d", p2), connc)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p2), c1)
 
 		r = NewRoute([]string{
 			fmt.Sprintf("localhost:%d", p0),
@@ -382,7 +389,7 @@ func TestRouteFork(t *testing.T) {
 
 		return &routeTestSetup{
 			route: r,
-			conns: []Connection{ <-connc, <-connc },
+			conns: []Connection{ <-c0, <-c1 },
 			teardown: cancel,
 		}
 	})
@@ -394,14 +401,17 @@ func TestRouteFork(t *testing.T) {
 
 func TestRouteTree(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
-		var connc chan Connection = make(chan Connection)
 		var res Resolver=NewGroupResolver(NewTcpResolver(mockProtocol))
 		var p0, p1, p2, p3, p4 uint16
 		var cancel context.CancelFunc
+		var c0, c1 chan Connection
 		var ctx context.Context
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
+
+		c0 = make(chan Connection)
+		c1 = make(chan Connection)
 
 		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
@@ -413,10 +423,10 @@ func TestRouteTree(t *testing.T) {
 		serveRelay(ctx, fmt.Sprintf(":%d", p2), res)
 
 		p3 = findTcpPort(t)
-		serveTerminal(ctx, fmt.Sprintf(":%d", p3), connc)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p3), c0)
 
 		p4 = findTcpPort(t)
-		serveTerminal(ctx, fmt.Sprintf(":%d", p4), connc)
+		serveTerminal(ctx, fmt.Sprintf(":%d", p4), c1)
 
 		r = NewRoute([]string{
 			fmt.Sprintf("localhost:%d", p0),
@@ -426,7 +436,7 @@ func TestRouteTree(t *testing.T) {
 
 		return &routeTestSetup{
 			route: r,
-			conns: []Connection{<-connc,<-connc,<-connc,<-connc},
+			conns: []Connection{ <-c0, <-c0, <-c1, <-c1 },
 			teardown: cancel,
 		}
 	})
