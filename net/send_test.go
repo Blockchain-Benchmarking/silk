@@ -230,6 +230,7 @@ func testFifoSenderAsync(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -260,6 +261,7 @@ func testFifoSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -292,6 +294,7 @@ func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -321,7 +324,11 @@ func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {
 
 
 func TestSenderAggregatorEmpty(t *testing.T) {
-	var s Sender = NewSliceSenderAggregator([]Sender{})
+	var s Sender
+
+	defer goleak.VerifyNone(t)
+
+	s = NewSliceSenderAggregator([]Sender{})
 
 	close(s.Send())
 }
