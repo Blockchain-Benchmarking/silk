@@ -60,4 +60,5 @@ clean:
 	-rm -rf $(BIN)
 
 cleanall: clean
+	-chmod -R u+wx $(PWD)/.go/
 	-rm -rf $(PWD)/.go/
