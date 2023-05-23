@@ -61,7 +61,7 @@ func TestAggregatedTcpConnectionOne(t *testing.T) {
 		var c Connection
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveAggregation(ctx, fmt.Sprintf(":%d", port), connc)
+		serveAggregation(ctx, fmt.Sprintf(":%d", port), connc)
 
 		c = NewAggregatedTcpConnection(
 			fmt.Sprintf("localhost:%d", port), mockProtocol, 1)
