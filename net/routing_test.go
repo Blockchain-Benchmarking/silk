@@ -338,14 +338,19 @@ func TestRouteLong(t *testing.T) {
 
 func TestRouteForkInvalid(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
-		var res Resolver=NewGroupResolver(NewTcpResolver(mockProtocol))
 		var connc chan Connection = make(chan Connection)
 		var cancel context.CancelFunc
 		var ctx context.Context
 		var p0, p1 uint16
+		var res Resolver
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
+
+		res = NewGroupResolver(NewTcpResolverWith(mockProtocol,
+			&TcpResolverOptions{
+				ConnectionContext: ctx,
+			}))
 
 		p0 = findTcpPort(t)
 		serveRelay(ctx, fmt.Sprintf(":%d", p0), res)
@@ -368,14 +373,19 @@ func TestRouteForkInvalid(t *testing.T) {
 
 func TestRouteFork(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
-		var res Resolver=NewGroupResolver(NewTcpResolver(mockProtocol))
 		var c0, c1 chan Connection
 		var cancel context.CancelFunc
 		var ctx context.Context
 		var p0, p1, p2 uint16
+		var res Resolver
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
+
+		res = NewGroupResolver(NewTcpResolverWith(mockProtocol,
+			&TcpResolverOptions{
+				ConnectionContext: ctx,
+			}))
 
 		c0 = make(chan Connection)
 		c1 = make(chan Connection)
@@ -408,14 +418,19 @@ func TestRouteFork(t *testing.T) {
 
 func TestRouteTree(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
-		var res Resolver=NewGroupResolver(NewTcpResolver(mockProtocol))
 		var p0, p1, p2, p3, p4 uint16
 		var cancel context.CancelFunc
 		var c0, c1 chan Connection
 		var ctx context.Context
+		var res Resolver
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
+
+		res = NewGroupResolver(NewTcpResolverWith(mockProtocol,
+			&TcpResolverOptions{
+				ConnectionContext: ctx,
+			}))
 
 		c0 = make(chan Connection)
 		c1 = make(chan Connection)
