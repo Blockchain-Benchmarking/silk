@@ -269,10 +269,10 @@ func testConnectionsConnectivity(as []Connection,bs []Connection,t *testing.T){
 
 	if len(bs) < len(as) {
 		t.Errorf("lost %d connections", len(as) - len(bs))
-		e += 1
+		return
 	} else if len(bs) > len(as) {
 		t.Errorf("got %d unexpected connections", len(bs) - len(as))
-		e += 1
+		return
 	}
 
 	ms = sendUniqueRecvMessages(append(append([]Connection{},as...),bs...))
