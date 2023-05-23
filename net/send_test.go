@@ -3,7 +3,7 @@ package net
 
 import (
 	"context"
-	"go.uber.org/goleak"
+	"silk/util/test/goleak"
 	"sync"
 	"testing"
 	"time"

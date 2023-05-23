@@ -4,7 +4,7 @@ package net
 import (
 	"context"
 	"fmt"
-	"go.uber.org/goleak"
+	"silk/util/test/goleak"
 	"testing"
 	"time"
 )
