@@ -3,6 +3,7 @@ package net
 
 import (
 	"context"
+	"go.uber.org/goleak"
 	"testing"
 	"time"
 )
@@ -44,6 +45,7 @@ func testReceiverCloseImmediately(t *testing.T, setup *receiverTestSetup) {
 	var ctx context.Context
 	var out []Message
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -71,6 +73,7 @@ func testReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -102,6 +105,7 @@ func testReceiverSync(t *testing.T, setup *receiverTestSetup) {
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -142,6 +146,7 @@ func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -174,6 +179,7 @@ func testReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -227,6 +233,7 @@ func testFifoReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -257,6 +264,7 @@ func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -289,6 +297,7 @@ func testFifoReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -318,8 +327,12 @@ func testFifoReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 
 
 func TestReceiverAggregatorEmpty(t *testing.T) {
-	var r Receiver = NewSliceReceiverAggregator([]ReceiverProtocol{})
+	var r Receiver
 	var more bool
+
+	defer goleak.VerifyNone(t)
+
+	r = NewSliceReceiverAggregator([]ReceiverProtocol{})
 
 	_, more = <-r.Recv(mockProtocol)
 	if more {
