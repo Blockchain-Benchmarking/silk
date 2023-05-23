@@ -165,13 +165,18 @@ func TestRouteShortUnresolvable(t *testing.T) {
 func TestRouteShort(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
 		var connc chan Connection = make(chan Connection)
-		var res Resolver = NewTcpResolver(mockProtocol)
 		var port uint16 = findTcpPort(t)
 		var cancel context.CancelFunc
 		var ctx context.Context
+		var res Resolver
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
+
+		res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
+			ConnectionContext: ctx,
+		})
+
 		go serveEndpoint(ctx, fmt.Sprintf(":%d", port), connc)
 
 		r = NewRoute([]string{fmt.Sprintf("localhost:%d", port)}, res)
