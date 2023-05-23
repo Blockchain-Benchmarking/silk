@@ -10,5 +10,4 @@ import (
 
 
 func VerifyNone(t *testing.T) {
-	t.Log("skip goleak")
 }
