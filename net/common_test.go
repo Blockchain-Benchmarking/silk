@@ -249,12 +249,9 @@ func sendUniqueRecvMessages(cs []Connection) []*mockMessage {
 	ms = make([]*mockMessage, len(cs))
 
 	for i = range cs {
-		select {
-		case msg, more = <-cs[i].RecvN(mockProtocol, 1):
-			if more {
-				ms[i] = msg.(*mockMessage)
-			}
-		case <-time.After(10 * BASE_TIMEOUT):
+		msg, more = <-cs[i].RecvN(mockProtocol, 1)
+		if more {
+			ms[i] = msg.(*mockMessage)
 		}
 	}
 
