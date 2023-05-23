@@ -3,9 +3,8 @@ package net
 
 import (
 	"context"
-	"go.uber.org/goleak"
+	"silk/util/test/goleak"
 	"testing"
-	"time"
 )
 
 
@@ -48,7 +47,7 @@ func testReceiverCloseImmediately(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
@@ -76,7 +75,7 @@ func testReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
@@ -108,7 +107,7 @@ func testReceiverSync(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	loop: for i = range in {
@@ -149,7 +148,7 @@ func testReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	in[70].encodingError = true
@@ -182,7 +181,7 @@ func testReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	in[70].decodingError = true
@@ -236,7 +235,7 @@ func testFifoReceiverAsync(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	outc = gatherMessages(setup.receiver.Recv(mockProtocol), ctx.Done())
@@ -267,7 +266,7 @@ func testFifoReceiverEncodingError(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	in[70].encodingError = true
@@ -300,7 +299,7 @@ func testFifoReceiverDecodingError(t *testing.T, setup *receiverTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	in[70].decodingError = true

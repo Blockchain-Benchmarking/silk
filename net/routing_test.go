@@ -4,9 +4,8 @@ package net
 import (
 	"context"
 	"fmt"
-	"go.uber.org/goleak"
+	"silk/util/test/goleak"
 	"testing"
-	"time"
 )
 
 
@@ -112,7 +111,7 @@ func TestRouteShortUnreachable(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
@@ -145,7 +144,7 @@ func TestRouteShortUnresolvable(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
@@ -166,14 +165,19 @@ func TestRouteShortUnresolvable(t *testing.T) {
 func TestRouteShort(t *testing.T) {
 	testRoute(t, func () *routeTestSetup {
 		var connc chan Connection = make(chan Connection)
-		var res Resolver = NewTcpResolver(mockProtocol)
 		var port uint16 = findTcpPort(t)
 		var cancel context.CancelFunc
 		var ctx context.Context
+		var res Resolver
 		var r Route
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveEndpoint(ctx, fmt.Sprintf(":%d", port), connc)
+
+		res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
+			ConnectionContext: ctx,
+		})
+
+		serveEndpoint(ctx, fmt.Sprintf(":%d", port), connc)
 
 		r = NewRoute([]string{fmt.Sprintf("localhost:%d", port)}, res)
 
