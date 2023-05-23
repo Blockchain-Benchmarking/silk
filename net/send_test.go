@@ -3,6 +3,7 @@ package net
 
 import (
 	"context"
+	"go.uber.org/goleak"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +46,7 @@ func testSenderCloseImmediately(t *testing.T, setup *senderTestSetup) {
 	var ctx context.Context
 	var out []Message
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -73,6 +75,7 @@ func testSenderAsync(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -104,6 +107,7 @@ func testSenderSync(t *testing.T, setup *senderTestSetup) {
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -139,6 +143,7 @@ func testSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -171,6 +176,7 @@ func testSenderDecodingError(t *testing.T, setup *senderTestSetup) {
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
