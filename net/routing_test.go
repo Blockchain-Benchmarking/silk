@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"silk/util/test/goleak"
 	"testing"
-	"time"
 )
 
 
@@ -112,7 +111,7 @@ func TestRouteShortUnreachable(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
@@ -145,7 +144,7 @@ func TestRouteShortUnresolvable(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	res = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{

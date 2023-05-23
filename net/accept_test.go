@@ -5,7 +5,6 @@ import (
 	"context"
 	"silk/util/test/goleak"
 	"testing"
-	"time"
 )
 
 
@@ -78,7 +77,7 @@ func testAccepterAsync(t *testing.T, setup *closeAccepterTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	ac = transmitConnections(setup.accepter.Accept(), NUM_CONNECTION)
@@ -126,7 +125,7 @@ func testAccepterAsyncN(t *testing.T, setup *accepterTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	ac = transmitConnections(setup.accepter.Accept(), NUM_CONNECTION)
@@ -166,7 +165,7 @@ func testAccepterSync(t *testing.T, setup *accepterTestSetup) {
 	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	loop: for i = 0; i < NUM_CONNECTION; i++ {

@@ -16,6 +16,9 @@ import (
 // ----------------------------------------------------------------------------
 
 
+const TIMEOUT = 5 * time.Second
+
+
 const BASE_TIMEOUT = 1000 * time.Millisecond
 
 func timeout(n int) <-chan struct{} {

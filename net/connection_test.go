@@ -5,7 +5,6 @@ import (
 	"context"
 	"silk/util/test/goleak"
 	"testing"
-	"time"
 )
 
 
@@ -118,7 +117,7 @@ func TestTcpConnectionUnresolvable(t *testing.T) {
 
 	defer goleak.VerifyNone(t)
 
-	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
 	defer cancel()
 
 	c = NewTcpConnectionWith(findUnresolvableAddr(t),&TcpConnectionOptions{
