@@ -763,6 +763,10 @@ func (this *dispatchRoute) dispatch(stream Connection, id int, accepting *sync.W
 		accepting.Done()
 		using.Done()
 	}
+
+	for _, conn = range conns {
+		close(conn.handle())
+	}
 }
 
 func (this *dispatchRoute) Accept() <-chan Connection {
