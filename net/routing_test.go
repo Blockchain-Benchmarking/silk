@@ -177,7 +177,7 @@ func TestRouteShort(t *testing.T) {
 			ConnectionContext: ctx,
 		})
 
-		go serveEndpoint(ctx, fmt.Sprintf(":%d", port), connc)
+		serveEndpoint(ctx, fmt.Sprintf(":%d", port), connc)
 
 		r = NewRoute([]string{fmt.Sprintf("localhost:%d", port)}, res)
 
