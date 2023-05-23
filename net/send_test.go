@@ -3,8 +3,10 @@ package net
 
 import (
 	"context"
+	"go.uber.org/goleak"
 	"sync"
 	"testing"
+	"time"
 )
 
 
@@ -39,10 +41,18 @@ func testSender(t *testing.T, setupf func () *senderTestSetup) {
 }
 
 func testSenderCloseImmediately(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(1))
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	close(setup.sender.Send())
 
@@ -58,12 +68,20 @@ func testSenderCloseImmediately(t *testing.T, setup *senderTestSetup) {
 }
 
 func testSenderAsync(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	for i = range in {
 		setup.sender.Send() <- MessageProtocol{in[i], mockProtocol}
@@ -82,13 +100,18 @@ func testSenderAsync(t *testing.T, setup *senderTestSetup) {
 
 func testSenderSync(t *testing.T, setup *senderTestSetup) {
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
-	var over <-chan struct{} = timeout(100)
 	var out []Message = make([]Message, 0)
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var msg Message
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 
 	loop: for i = range in {
 		setup.sender.Send() <- MessageProtocol{in[i], mockProtocol}
@@ -101,7 +124,7 @@ func testSenderSync(t *testing.T, setup *senderTestSetup) {
 			} else {
 				out = append(out, msg)
 			}
-		case <-over:
+		case <-ctx.Done():
 			t.Errorf("timeout")
 			break loop
 		}
@@ -113,10 +136,20 @@ func testSenderSync(t *testing.T, setup *senderTestSetup) {
 }
 
 func testSenderEncodingError(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
+
+	defer goleak.VerifyNone(t)
+	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	in[70].encodingError = true
 
@@ -133,17 +166,23 @@ func testSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	}
 
 	testMessageSetInclusive(in[:70], out, t)
-
-	setup.teardown()
 }
 
 func testSenderDecodingError(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	in[70].decodingError = true
 
@@ -184,12 +223,20 @@ func testFifoSender(t *testing.T, setupf func () *senderTestSetup) {
 }
 
 func testFifoSenderAsync(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	for i = range in {
 		setup.sender.Send() <- MessageProtocol{in[i], mockProtocol}
@@ -207,10 +254,20 @@ func testFifoSenderAsync(t *testing.T, setup *senderTestSetup) {
 }
 
 func testFifoSenderEncodingError(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
+
+	defer goleak.VerifyNone(t)
+	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	in[70].encodingError = true
 
@@ -227,17 +284,23 @@ func testFifoSenderEncodingError(t *testing.T, setup *senderTestSetup) {
 	}
 
 	testMessagesEquality(in[:70], out, t)
-
-	setup.teardown()
 }
 
 func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {
-	var outc <-chan []Message = gatherMessages(setup.recvc, timeout(100))
 	var in []*mockMessage = generateLinearShallowMessages(100, 1 << 21)
+	var cancel context.CancelFunc
+	var outc <-chan []Message
+	var ctx context.Context
 	var out []Message
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	outc = gatherMessages(setup.recvc, ctx.Done())
 
 	in[70].decodingError = true
 
@@ -261,7 +324,11 @@ func testFifoSenderDecodingError(t *testing.T, setup *senderTestSetup) {
 
 
 func TestSenderAggregatorEmpty(t *testing.T) {
-	var s Sender = NewSliceSenderAggregator([]Sender{})
+	var s Sender
+
+	defer goleak.VerifyNone(t)
+
+	s = NewSliceSenderAggregator([]Sender{})
 
 	close(s.Send())
 }

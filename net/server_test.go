@@ -4,6 +4,7 @@ package net
 import (
 	"context"
 	"fmt"
+	"go.uber.org/goleak"
 	"testing"
 )
 
@@ -14,6 +15,8 @@ import (
 func TestTcpServerEmptyAddr(t *testing.T) {
 	var s Accepter = NewTcpServer("")
 	var more bool
+
+	defer goleak.VerifyNone(t)
 
 	_, more = <-s.Accept()
 
@@ -27,6 +30,8 @@ func TestTcpServerAlreadyUsedPort(t *testing.T) {
 	var port uint16
 	var s Accepter
 	var more bool
+
+	defer goleak.VerifyNone(t)
 
 	port, cancel = findUsedTcpPort(t)
 	defer cancel()

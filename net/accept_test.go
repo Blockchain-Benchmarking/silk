@@ -2,7 +2,10 @@ package net
 
 
 import (
+	"context"
+	"go.uber.org/goleak"
 	"testing"
+	"time"
 )
 
 
@@ -50,6 +53,7 @@ func testCloseAccepter(t *testing.T, setupf func () *closeAccepterTestSetup) {
 func testAccepterCloseImmediately(t *testing.T, setup *closeAccepterTestSetup){
 	var more bool
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	setup.closef()
@@ -62,16 +66,22 @@ func testAccepterCloseImmediately(t *testing.T, setup *closeAccepterTestSetup){
 
 func testAccepterAsync(t *testing.T, setup *closeAccepterTestSetup) {
 	var cs []Connection = make([]Connection, 1000)
+	var cancel context.CancelFunc
 	var asc <-chan []Connection
 	var ac <-chan Connection
+	var ctx context.Context
 	var as []Connection
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	ac = transmitConnections(setup.accepter.Accept(), len(cs))
-	asc = gatherConnections(ac, timeout(100))
+	asc = gatherConnections(ac, ctx.Done())
 
 	for i = range cs {
 		cs[i] = setup.connectf()
@@ -102,15 +112,21 @@ func testAccepterAsync(t *testing.T, setup *closeAccepterTestSetup) {
 
 func testAccepterAsyncN(t *testing.T, setup *accepterTestSetup) {
 	var cs []Connection = make([]Connection, 1000)
+	var cancel context.CancelFunc
 	var asc <-chan []Connection
 	var ac <-chan Connection
+	var ctx context.Context
 	var as []Connection
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	ac = transmitConnections(setup.accepter.Accept(), len(cs))
-	asc = gatherConnections(ac, timeout(100))
+	asc = gatherConnections(ac, ctx.Done())
 
 	for i = range cs {
 		cs[i] = setup.connectf()
@@ -135,12 +151,17 @@ func testAccepterAsyncN(t *testing.T, setup *accepterTestSetup) {
 func testAccepterSync(t *testing.T, setup *accepterTestSetup) {
 	var cs []Connection = make([]Connection, 1000)
 	var as []Connection = make([]Connection, 0, len(cs))
-	var over <-chan struct{} = timeout(100)
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var a Connection
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 
 	loop: for i = range cs {
 		cs[i] = setup.connectf()
@@ -157,7 +178,7 @@ func testAccepterSync(t *testing.T, setup *accepterTestSetup) {
 			} else {
 				as = append(as, a)
 			}
-		case <-over:
+		case <-ctx.Done():
 			t.Errorf("timeout")
 			break loop
 		}

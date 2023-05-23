@@ -2,10 +2,12 @@ package net
 
 
 import (
+	"context"
 	"fmt"
 	sio "silk/io"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -26,6 +28,10 @@ type Resolver interface {
 
 type TcpResolverOptions struct {
 	Log sio.Logger
+
+	ConnectionContext context.Context
+
+	ConnectionTimeout time.Duration
 }
 
 func NewTcpResolver(proto Protocol) Resolver {
@@ -39,6 +45,10 @@ func NewTcpResolverWith(proto Protocol, opts *TcpResolverOptions) Resolver {
 
 	if opts.Log == nil {
 		opts.Log = sio.NewNopLogger()
+	}
+
+	if opts.ConnectionContext == nil {
+		opts.ConnectionContext = context.Background()
 	}
 
 	return newTcpResolver(proto, opts)
@@ -79,6 +89,8 @@ type ResolverInvalidNameError struct {
 
 type tcpResolver struct {
 	log sio.Logger
+	ctx context.Context
+	timeout time.Duration
 	proto Protocol
 }
 
@@ -86,6 +98,8 @@ func newTcpResolver(proto Protocol, opts *TcpResolverOptions) *tcpResolver {
 	var this tcpResolver
 
 	this.log = opts.Log
+	this.ctx = opts.ConnectionContext
+	this.timeout = opts.ConnectionTimeout
 	this.proto = proto
 
 	return &this
@@ -101,7 +115,10 @@ func (this *tcpResolver) Resolve(name string) ([]Route, []Protocol, error) {
 		return nil, nil, &ResolverInvalidNameError{ name }
 	}
 
-	ret = NewUnitLeafRoute(NewTcpConnection(name))
+	ret = NewUnitLeafRoute(NewTcpConnectionWith(name,&TcpConnectionOptions{
+		ConnectionContext: this.ctx,
+		ConnectionTimeout: this.timeout,
+	}))
 
 	return []Route{ ret }, []Protocol{ this.proto }, nil
 }

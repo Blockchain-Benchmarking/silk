@@ -22,8 +22,8 @@ type Route interface {
 	// Specifically, the following situation can occur:
 	//
 	//     var r Route = ...
-	//     var a, _ = r.Accept()
-	//     var b, _ = r.Accept()
+	//     var a = <-r.Accept()
+	//     var b = <-r.Accept()
 	//
 	//     go func () { a.Send() <- mp0 ; b.Send() <- mp1 }()
 	//     go func () { r.Send() <- mp }()
