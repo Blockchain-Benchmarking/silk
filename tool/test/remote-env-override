@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+#   Does a remote process inherit from the server environment when the client
+#   provides environment variables?
+#
+
+
+MY_SERVER_VAR='foo' silk server --tcp=3200 --pidfile='silk.pid' &
+while [ ! -e 'silk.pid' ] ; do sleep 0.01 ; done
+
+cat > 'script' <<EOF
+#!/bin/bash
+echo \$MY_SERVER_VAR
+echo \$MY_CLIENT_VAR
+EOF
+chmod 755 'script'
+
+silk run --env=MY_CLIENT_VAR='bar' 'localhost:3200' ./script > 'observed'
+
+cat > 'expected' <<EOF
+foo
+bar
+EOF
+
+diff -Naur 'observed' 'expected'
