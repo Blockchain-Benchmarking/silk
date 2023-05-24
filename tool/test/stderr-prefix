@@ -7,8 +7,9 @@
 #
 
 
-silk server --tcp=3200 --name='a' &
-silk server --tcp=3201 --name='b' &
+silk server --tcp=3200 --name='a' --pidfile='a.pid' &
+silk server --tcp=3201 --name='b' --pidfile='b.pid' &
+while [ ! -e 'a.pid' -o ! -e 'b.pid' ] ; do sleep 0.01 ; done
 
 printf '#!/bin/bash\necho ok >&2\n' \
     | silk run -L '(localhost:3200|localhost:3201)' - \
