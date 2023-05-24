@@ -22,7 +22,8 @@ const DEFAULT_TCP_PORT = 3200
 
 
 func serverUsage() {
-	fmt.Printf(`Usage: %s server [-n<str> | --name=<str>] [--tcp[=<int>]]
+	fmt.Printf(`Usage: %s server [-n<str> | --name=<str>]
+       [-p<path> | --pidfile=<path>] [--tcp[=<int>]]
 
 Launch a server.
 By default, the server listen for connections on the tcp port %d and run in
@@ -31,6 +32,8 @@ foreground.
 Options:
 
   -n<str>, --name=<str>       Launch the server with the given <str> name.
+
+  -p<path>, --pidfile=<path>  Create a pidfile once the server is running.
 
   --tcp[=<int>]               Tell the server to listen for tcp connections.
                               If <int> is specified then listen on this tcp
