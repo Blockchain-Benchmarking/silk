@@ -162,3 +162,36 @@ func TestProcessCat(t *testing.T) {
 		t.Errorf("stdout: '%s'", string(data))
 	}
 }
+
+func TestProcessPrintEnv(t *testing.T) {
+	var data []byte = make([]byte, 0)
+	const val = "test_val"
+	var proc Process
+	var err error
+	var n uint8
+
+	proc, err = NewProcessWith("bash", []string{ "-c", "printf $VAR" },
+		&ProcessOptions{
+			Env: map[string]string{
+				"VAR": val,
+			},
+			Stdout: func (b []byte) error {
+				data = append(data, b...)
+				return nil
+			},
+		})
+	if err != nil {
+		t.Errorf("new: %v", err)
+	}
+
+	proc.Wait()
+
+	n = proc.Exit()
+	if n != 0 {
+		t.Errorf("exit: %d", n)
+	}
+
+	if string(data) != val {
+		t.Errorf("stdout: '%s'", string(data))
+	}
+}
