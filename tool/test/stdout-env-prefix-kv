@@ -5,8 +5,9 @@
 #
 
 
-silk server --tcp=3200 &
-silk server --tcp=3201 &
+silk server --tcp=3200 --pidfile='a.pid' &
+silk server --tcp=3201 --pidfile='b.pid' &
+while [ ! -e 'a.pid' -o ! -e 'b.pid' ] ; do sleep 0.01 ; done
 
 silk kv 'localhost:3200' name='A' id=0
 silk kv 'localhost:3201' name='B' id=1

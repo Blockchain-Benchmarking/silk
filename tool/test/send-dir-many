@@ -6,8 +6,9 @@
 
 mkdir 'src' 's0' 's1'
 
-( cd 's0' ; silk server --tcp=3200 ) &
-( cd 's1' ; silk server --tcp=3201 ) &
+( cd 's0' ; silk server --tcp=3200 --pidfile='silk.pid' ) &
+( cd 's1' ; silk server --tcp=3201 --pidfile='silk.pid' ) &
+while [ ! -e 's0/silk.pid' -o ! -e 's1/silk.pid' ] ; do sleep 0.01 ; done
 
 mkdir 'src/dir'
 echo 'foo' > 'src/dir/file-0'
