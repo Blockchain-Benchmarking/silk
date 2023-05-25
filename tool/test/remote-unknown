@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+#   Does the client exit with failure and warning message if the remote
+#   processes does not find executable?
+#
+
+
+silk server --tcp=3200 --pidfile='silk.pid' &
+while [ ! -e 'silk.pid' ] ; do sleep 0.01 ; done
+
+cmd=unknown-command
+while command -v ${cmd} ; do cmd=${cmd}_ ; done
+
+silk run --verbose='warn' 'localhost:3200' ${cmd} 2> 'stderr'
+ret=$?
+
+test ${ret} -ne 0 && \
+grep -qi 'not found' 'stderr'
+
