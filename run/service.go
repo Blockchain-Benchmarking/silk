@@ -715,6 +715,7 @@ var protocol net.Protocol = net.NewUint8Protocol(map[uint8]net.Message{
 	106: &jobStderrData{},
 	107: &jobStderrClose{},
 	108: &jobSignal{},
+	109: &jobAbort{},
 })
 
 
@@ -894,6 +895,19 @@ func (this *jobSignal) Encode(sink sio.Sink) error {
 
 func (this *jobSignal) Decode(source sio.Source) error {
 	return source.ReadUint8(&this.signum).Error()
+}
+
+
+type jobAbort struct {
+	text string
+}
+
+func (this *jobAbort) Encode(sink sio.Sink) error {
+	return sink.WriteString16(this.text).Error()
+}
+
+func (this *jobAbort) Decode(source sio.Source) error {
+	return source.ReadString16(&this.text).Error()
 }
 
 
