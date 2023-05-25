@@ -139,6 +139,16 @@ func (this *agent) run(running, using *sync.WaitGroup) {
 				close(this.stderrc)
 			}
 
+		case *jobAbort:
+			this.log.Error("%s", m.text)
+			close(this.stdoutc)
+			close(this.stderrc)
+			this.exit.Store(uint8(255))
+			stdout = false
+			stderr = false
+			exited = true
+			break loop
+
 		default:
 			this.log.Warn("unexpected message: %T",
 				this.log.Emph(2, msg))

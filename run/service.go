@@ -353,6 +353,12 @@ func (this *serviceProcess) run() {
 	})
 	if err != nil {
 		this.log.Warn("%s", err.Error())
+
+		this.conn.Send() <- net.MessageProtocol{
+			M: &jobAbort{ err.Error() },
+			P: protocol,
+		}
+
 		return
 	}
 
