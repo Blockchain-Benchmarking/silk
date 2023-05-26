@@ -15,7 +15,7 @@ import (
 
 
 const ProgramName = "silk"
-const ProgramVersion = "0.4.0"
+const ProgramVersion = "0.5.0"
 const AuthorName = "Gauthier Voron"
 const AuthorEmail = "gauthier.voron@epfl.ch"
 
