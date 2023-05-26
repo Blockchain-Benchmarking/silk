@@ -2,6 +2,8 @@ package net
 
 
 import (
+	"context"
+	"silk/util/test/goleak"
 	"testing"
 )
 
@@ -50,6 +52,7 @@ func testCloseAccepter(t *testing.T, setupf func () *closeAccepterTestSetup) {
 func testAccepterCloseImmediately(t *testing.T, setup *closeAccepterTestSetup){
 	var more bool
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
 	setup.closef()
@@ -61,24 +64,33 @@ func testAccepterCloseImmediately(t *testing.T, setup *closeAccepterTestSetup){
 }
 
 func testAccepterAsync(t *testing.T, setup *closeAccepterTestSetup) {
-	var cs []Connection = make([]Connection, 1000)
+	const NUM_CONNECTION = 1000
+	var cancel context.CancelFunc
 	var asc <-chan []Connection
 	var ac <-chan Connection
-	var as []Connection
+	var ctx context.Context
+	var as, cs []Connection
+	var c Connection
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ac = transmitConnections(setup.accepter.Accept(), len(cs))
-	asc = gatherConnections(ac, timeout(100))
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
+	defer cancel()
 
-	for i = range cs {
-		cs[i] = setup.connectf()
-		if cs[i] == nil {
-			cs = cs[:i]
+	ac = transmitConnections(setup.accepter.Accept(), NUM_CONNECTION)
+	asc = gatherConnections(ac, ctx.Done())
+
+	for i = 0; i < NUM_CONNECTION; i++ {
+		c = setup.connectf()
+
+		if c == nil {
 			break
 		}
+
+		cs = append(cs, c)
 	}
 
 	as = <-asc
@@ -101,23 +113,32 @@ func testAccepterAsync(t *testing.T, setup *closeAccepterTestSetup) {
 }
 
 func testAccepterAsyncN(t *testing.T, setup *accepterTestSetup) {
-	var cs []Connection = make([]Connection, 1000)
+	const NUM_CONNECTION = 1000
+	var cancel context.CancelFunc
 	var asc <-chan []Connection
 	var ac <-chan Connection
-	var as []Connection
+	var ctx context.Context
+	var as, cs []Connection
+	var c Connection
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	ac = transmitConnections(setup.accepter.Accept(), len(cs))
-	asc = gatherConnections(ac, timeout(100))
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
+	defer cancel()
 
-	for i = range cs {
-		cs[i] = setup.connectf()
-		if cs[i] == nil {
-			cs = cs[:i]
+	ac = transmitConnections(setup.accepter.Accept(), NUM_CONNECTION)
+	asc = gatherConnections(ac, ctx.Done())
+
+	for i = 0; i < NUM_CONNECTION; i++ {
+		c = setup.connectf()
+
+		if c == nil {
 			break
 		}
+
+		cs = append(cs, c)
 	}
 
 	as = <-asc
@@ -133,19 +154,24 @@ func testAccepterAsyncN(t *testing.T, setup *accepterTestSetup) {
 }
 
 func testAccepterSync(t *testing.T, setup *accepterTestSetup) {
-	var cs []Connection = make([]Connection, 1000)
-	var as []Connection = make([]Connection, 0, len(cs))
-	var over <-chan struct{} = timeout(100)
-	var a Connection
+	const NUM_CONNECTION = 1000
+	var cancel context.CancelFunc
+	var ctx context.Context
+	var as, cs []Connection
+	var a, c Connection
 	var more bool
 	var i int
 
+	defer goleak.VerifyNone(t)
 	defer setup.teardown()
 
-	loop: for i = range cs {
-		cs[i] = setup.connectf()
-		if cs[i] == nil {
-			cs = cs[:i]
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
+	defer cancel()
+
+	loop: for i = 0; i < NUM_CONNECTION; i++ {
+		c = setup.connectf()
+
+		if c == nil {
 			break
 		}
 
@@ -153,12 +179,15 @@ func testAccepterSync(t *testing.T, setup *accepterTestSetup) {
 		case a, more = <-setup.accepter.Accept():
 			if more == false {
 				t.Errorf("closed unexpectedly")
+				close(c.Send())
 				break loop
 			} else {
 				as = append(as, a)
+				cs = append(cs, c)
 			}
-		case <-over:
+		case <-ctx.Done():
 			t.Errorf("timeout")
+			close(c.Send())
 			break loop
 		}
 	}

@@ -35,7 +35,11 @@ func _aggregateConnections(a Accepter, as AggregationService) {
 }
 
 func serveAggregation(ctx context.Context, addr string, c chan<- Connection) {
-	var as AggregationService = NewAggregationService()
+	var as AggregationService
+
+	as = NewAggregationServiceWith(&AggregationServiceOptions{
+		Context: ctx,
+	})
 
 	go acceptConnections(as, c)
 
@@ -57,7 +61,7 @@ func TestAggregatedTcpConnectionOne(t *testing.T) {
 		var c Connection
 
 		ctx, cancel = context.WithCancel(context.Background())
-		go serveAggregation(ctx, fmt.Sprintf(":%d", port), connc)
+		serveAggregation(ctx, fmt.Sprintf(":%d", port), connc)
 
 		c = NewAggregatedTcpConnection(
 			fmt.Sprintf("localhost:%d", port), mockProtocol, 1)

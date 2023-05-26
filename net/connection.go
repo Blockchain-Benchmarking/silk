@@ -6,6 +6,7 @@ import (
 	"context"
 	"net"
 	sio "silk/io"
+	"time"
 	"sync"
 )
 
@@ -28,8 +29,27 @@ func NewPiecewiseConnection(sender Sender, receiver Receiver) Connection {
 	return newPiecewiseConnection(sender, receiver)
 }
 
+
 func NewTcpConnection(addr string) Connection {
-	return dialTcpConnection(addr)
+	return NewTcpConnectionWith(addr, nil)
+}
+
+func NewTcpConnectionWith(addr string, opts *TcpConnectionOptions) Connection {
+	if opts == nil {
+		opts = &TcpConnectionOptions{}
+	}
+
+	if opts.ConnectionContext == nil {
+		opts.ConnectionContext = context.Background()
+	}
+
+	return dialTcpConnection(addr, opts)
+}
+
+type TcpConnectionOptions struct {
+	ConnectionContext context.Context
+
+	ConnectionTimeout time.Duration
 }
 
 
@@ -193,23 +213,35 @@ func newTcpConnection(conn net.Conn) *tcpConnection {
 	return &this
 }
 
-func dialTcpConnection(addr string) *tcpConnection {
+func dialTcpConnection(addr string, opts *TcpConnectionOptions) *tcpConnection{
 	var this tcpConnection
 
 	this.cond = sync.NewCond(&this.lock)
 	this.ready = false
 	this.sendc = make(chan MessageProtocol, 32)
 
-	go this.dial(addr)
+	go this.dial(addr, opts)
 
 	return &this
 }
 
-func (this *tcpConnection) dial(addr string) {
+func (this *tcpConnection) dial(addr string, opts *TcpConnectionOptions) {
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var dialer net.Dialer
 	var conn net.Conn
 
-	conn, _ = dialer.DialContext(context.Background(), "tcp", addr)
+	ctx = opts.ConnectionContext
+
+	if opts.ConnectionTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, opts.ConnectionTimeout)
+	} else {
+		cancel = func () {}
+	}
+
+	conn, _ = dialer.DialContext(ctx, "tcp", addr)
+
+	cancel()
 
 	this.lock.Lock()
 

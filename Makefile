@@ -38,7 +38,8 @@ install: $(BIN)silk
 test: unit-test validation-test
 
 unit-test:
-	go test $(test_verbosity_options) -count=1 $(test_parameters)
+	ulimit -n $$(ulimit -Hn) && \
+        go test $(test_verbosity_options) -count=1 $(test_parameters)
 
 validation-test: $(BIN)silk
 	./tool/validate -p $(BIN)
@@ -60,4 +61,5 @@ clean:
 	-rm -rf $(BIN)
 
 cleanall: clean
+	-chmod -R u+wx $(PWD)/.go/
 	-rm -rf $(PWD)/.go/

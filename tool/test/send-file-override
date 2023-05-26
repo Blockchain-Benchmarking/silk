@@ -5,7 +5,8 @@
 #
 
 
-silk server --tcp=3200 &
+silk server --tcp=3200 --pidfile='silk.pid' &
+while [ ! -e 'silk.pid' ] ; do sleep 0.01 ; done
 
 mkdir 'dest' 'src'
 mkdir 'dest/file'

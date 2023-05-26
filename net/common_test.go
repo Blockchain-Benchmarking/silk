@@ -16,6 +16,9 @@ import (
 // ----------------------------------------------------------------------------
 
 
+const TIMEOUT = 5 * time.Second
+
+
 const BASE_TIMEOUT = 1000 * time.Millisecond
 
 func timeout(n int) <-chan struct{} {
@@ -246,12 +249,9 @@ func sendUniqueRecvMessages(cs []Connection) []*mockMessage {
 	ms = make([]*mockMessage, len(cs))
 
 	for i = range cs {
-		select {
-		case msg, more = <-cs[i].RecvN(mockProtocol, 1):
-			if more {
-				ms[i] = msg.(*mockMessage)
-			}
-		case <-time.After(10 * BASE_TIMEOUT):
+		msg, more = <-cs[i].RecvN(mockProtocol, 1)
+		if more {
+			ms[i] = msg.(*mockMessage)
 		}
 	}
 
@@ -269,10 +269,10 @@ func testConnectionsConnectivity(as []Connection,bs []Connection,t *testing.T){
 
 	if len(bs) < len(as) {
 		t.Errorf("lost %d connections", len(as) - len(bs))
-		e += 1
+		return
 	} else if len(bs) > len(as) {
 		t.Errorf("got %d unexpected connections", len(bs) - len(as))
-		e += 1
+		return
 	}
 
 	ms = sendUniqueRecvMessages(append(append([]Connection{},as...),bs...))

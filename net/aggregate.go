@@ -3,6 +3,7 @@ package net
 
 import (
 	"bytes"
+	"context"
 	sio "silk/io"
 	"silk/util/rand"
 	"sync"
@@ -12,13 +13,37 @@ import (
 // ----------------------------------------------------------------------------
 
 
+// A service to `Accept()` aggregated connections.
+//
+// An aggregated connection is a set of `Connection`s appearing as a single
+// `Connection` but which balances the load across the different underlying
+// `Connection`s.
+//
+// An `AggregationService` accepts new `Connection`s by `Handle()`ing incoming
+// `AggregationMessage`s coming from a given `Connection`. Once enough of these
+// `Connection`s of the same set have been `Handle()`d, a new aggregatd
+// `Connection` can be received from the `Accept()` channel.
+//
 type AggregationService interface {
+	// Interface for `Accept()`ing incoming aggregated `Connection`s.
+	// The returned accept channel is closed when the `Context` of this
+	// service is done.
+	//
 	Accepter
 
+	// Handle an `AggregationMessage` carried by the associated
+	// `Connection` so this connection gets associated to the appropriate
+	// aggregated connection.
+	//
+	// Calling `Handle()` when this service has an associated `Context`
+	// that is done is undefined behavior.
+	//
 	Handle(*AggregationMessage, Connection)
 }
 
 type AggregationServiceOptions struct {
+	Context context.Context
+
 	Log sio.Logger
 }
 
@@ -93,6 +118,13 @@ func newAggregationService(opts *AggregationServiceOptions)*aggregationService{
 	this.log = opts.Log
 	this.reqc = make(chan *aggregationRequest)
 	this.acceptc = make(chan Connection, 16)
+
+	if opts.Context != nil {
+		go func () {
+			<-opts.Context.Done()
+			close(this.reqc)
+		}()
+	}
 
 	go this.run()
 

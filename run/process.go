@@ -140,6 +140,7 @@ func newProcess(name string, args []string, opts *ProcessOptions) (*process, err
 	var this process
 	var err error
 
+	env = os.Environ()
 	for key, value = range opts.Env {
 		if strings.Contains(key, "=") {
 			return nil, &InvalidEnvironmentError{ key, value }

@@ -3,6 +3,7 @@ package net
 
 import (
 	"context"
+	"silk/util/test/goleak"
 	"testing"
 )
 
@@ -67,6 +68,8 @@ func TestTcpConnectionEmptyAddr(t *testing.T) {
 	var c Connection
 	var more bool
 
+	defer goleak.VerifyNone(t)
+
 	c = NewTcpConnection("")
 
 	c.Send() <- MessageProtocol{ &mockMessage{}, mockProtocol }
@@ -88,6 +91,8 @@ func TestTcpConnectionUnreachable(t *testing.T) {
 	var c Connection
 	var more bool
 
+	defer goleak.VerifyNone(t)
+
 	c = NewTcpConnection(findTcpAddr(t))
 
 	c.Send() <- MessageProtocol{ &mockMessage{}, mockProtocol }
@@ -106,9 +111,18 @@ func TestTcpConnectionUnreachable(t *testing.T) {
 }
 
 func TestTcpConnectionUnresolvable(t *testing.T) {
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var c Connection
 
-	c = NewTcpConnection(findUnresolvableAddr(t))
+	defer goleak.VerifyNone(t)
+
+	ctx, cancel = context.WithTimeout(context.Background(), TIMEOUT)
+	defer cancel()
+
+	c = NewTcpConnectionWith(findUnresolvableAddr(t),&TcpConnectionOptions{
+		ConnectionContext: ctx,
+	})
 
 	close(c.Send())
 }

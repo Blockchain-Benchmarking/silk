@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"silk/util/test/goleak"
 	"testing"
 )
 
@@ -16,6 +17,8 @@ func testResolverInvalidName(t *testing.T, r Resolver, name string) {
 	var e *ResolverInvalidNameError
 	var err error
 	var ok bool
+
+	defer goleak.VerifyNone(t)
 
 	_, _, err = r.Resolve(name)
 
@@ -128,12 +131,16 @@ func TestTcpResolverLocalhost(t *testing.T) {
 }
 
 func TestTcpResolverUnreachable(t *testing.T) {
-	var r Resolver = NewTcpResolver(mockProtocol)
 	var ps []Protocol
 	var c Connection
 	var rs []Route
+	var r Resolver
 	var more bool
 	var err error
+
+	defer goleak.VerifyNone(t)
+
+	r = NewTcpResolver(mockProtocol)
 
 	rs, ps, err = r.Resolve(findTcpAddr(t))
 
@@ -165,12 +172,23 @@ func TestTcpResolverUnreachable(t *testing.T) {
 }
 
 func TestTcpResolverUnresolvableAddr(t *testing.T) {
-	var r Resolver = NewTcpResolver(mockProtocol)
+	var cancel context.CancelFunc
+	var ctx context.Context
 	var ps []Protocol
 	var c Connection
 	var rs []Route
+	var r Resolver
 	var more bool
 	var err error
+
+	defer goleak.VerifyNone(t)
+
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	r = NewTcpResolverWith(mockProtocol, &TcpResolverOptions{
+		ConnectionContext: ctx,
+	})
 
 	rs, ps, err = r.Resolve(findUnresolvableAddr(t))
 

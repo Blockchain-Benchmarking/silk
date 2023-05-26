@@ -3,6 +3,7 @@ package net
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	sio "silk/io"
@@ -18,6 +19,10 @@ import (
 // A service to relay `Route` messages.
 //
 type RoutingService interface {
+	// Interface for `Accept()`ing incoming routed `Connection`s.
+	// The returned accept channel is closed when the `Context` of this
+	// service is done.
+	//
 	Accepter
 
 	// Handle a `RoutingMessage` coming from the given `Connection`.
@@ -25,11 +30,16 @@ type RoutingService interface {
 	// it.
 	// Return once the relayed `Route` is fully closed.
 	//
+	// Calling `Handle()` when this service has an associated `Context`
+	// that is done is undefined behavior.
+	//
 	Handle(*RoutingMessage, Connection)
 }
 
 
 type RoutingServiceOptions struct {
+	Context context.Context
+
 	Log sio.Logger
 }
 
@@ -119,6 +129,13 @@ func newRoutingService(r Resolver, o *RoutingServiceOptions) *routingService {
 	this.resolver = r
 	this.acceptc = make(chan Connection)
 	this.nextId.Store(0)
+
+	if o.Context != nil {
+		go func () {
+			<-o.Context.Done()
+			close(this.acceptc)
+		}()
+	}
 
 	return &this
 }
@@ -361,6 +378,7 @@ type relay struct {
 	remote Route
 	lock sync.Mutex
 	conns []Connection
+	forwarding bool
 }
 
 func newRelay(origin Connection, remote Route, log sio.Logger) *relay {
@@ -370,6 +388,7 @@ func newRelay(origin Connection, remote Route, log sio.Logger) *relay {
 	this.origin = origin
 	this.remote = remote
 	this.conns = make([]Connection, 0)
+	this.forwarding = true
 
 	return &this
 }
@@ -380,13 +399,18 @@ func (this *relay) run() {
 }
 
 func (this *relay) accept() {
+	var transferring sync.WaitGroup
 	var conn Connection
 	var id uint16
 
 	for conn = range this.remote.Accept() {
 		this.lock.Lock()
-		id = uint16(len(this.conns))
-		this.conns = append(this.conns, conn)
+		if this.forwarding {
+			id = uint16(len(this.conns))
+			this.conns = append(this.conns, conn)
+		} else {
+			close(conn.Send())
+		}
 		this.lock.Unlock()
 
 		this.log.Trace("relay back accept as %d", this.log.Emph(1, id))
@@ -395,7 +419,8 @@ func (this *relay) accept() {
 			P: routingProtocol,
 		}
 
-		go this.backward(conn, id)
+		transferring.Add(1)
+		go this.backward(conn, id, &transferring)
 	}
 
 	this.log.Trace("relay back end of accept")
@@ -403,9 +428,13 @@ func (this *relay) accept() {
 		M: &routingAccepted{},
 		P: routingProtocol,
 	}
+
+	transferring.Wait()
+
+	close(this.origin.Send())
 }
 
-func (this *relay) backward(conn Connection, id uint16) {
+func (this *relay) backward(conn Connection, id uint16, txwg *sync.WaitGroup) {
 	var msg Message
 
 	for msg = range conn.Recv(routingProtocol) {
@@ -428,14 +457,13 @@ func (this *relay) backward(conn Connection, id uint16) {
 		M: &routingIdClose{ id },
 		P: routingProtocol,
 	}
+
+	txwg.Done()
 }
 
 func (this *relay) forward() {
 	var conn Connection
-	var closed bool
 	var msg Message
-
-	closed = false
 
 	for msg = range this.origin.Recv(routingProtocol) {
 		switch m := msg.(type) {
@@ -461,11 +489,6 @@ func (this *relay) forward() {
 			}
 
 		case *routingBroadcast:
-			if closed {
-				this.log.Warn("broadcast on closed route")
-				continue
-			}
-
 			this.log.Trace("relay forw %d bytes of broadcast",
 				len(m.content))
 			this.remote.Send() <- MessageProtocol{
@@ -501,6 +524,16 @@ func (this *relay) forward() {
 	}
 
 	close(this.remote.Send())
+
+	this.lock.Lock()
+	this.forwarding = false
+	this.lock.Unlock()
+
+	for _, conn = range this.conns {
+		if conn != nil {
+			close(conn.Send())
+		}
+	}
 }
 
 
@@ -729,6 +762,10 @@ func (this *dispatchRoute) dispatch(stream Connection, id int, accepting *sync.W
 		slog.Warn("closed unexpectedly")
 		accepting.Done()
 		using.Done()
+	}
+
+	for _, conn = range conns {
+		close(conn.handle())
 	}
 }
 

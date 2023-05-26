@@ -22,7 +22,8 @@ const DEFAULT_TCP_PORT = 3200
 
 
 func serverUsage() {
-	fmt.Printf(`Usage: %s server [-n<str> | --name=<str>] [--tcp[=<int>]]
+	fmt.Printf(`Usage: %s server [-n<str> | --name=<str>]
+       [-p<path> | --pidfile=<path>] [--tcp[=<int>]]
 
 Launch a server.
 By default, the server listen for connections on the tcp port %d and run in
@@ -31,6 +32,8 @@ foreground.
 Options:
 
   -n<str>, --name=<str>       Launch the server with the given <str> name.
+
+  -p<path>, --pidfile=<path>  Create a pidfile once the server is running.
 
   --tcp[=<int>]               Tell the server to listen for tcp connections.
                               If <int> is specified then listen on this tcp
@@ -113,7 +116,7 @@ func setupServerSigmask(log sio.Logger) {
 	}()
 }
 
-func serverStart(port int, name string, log sio.Logger) {
+func serverStart(port int, name string, pidfile string, log sio.Logger) {
 	var aggregationService net.AggregationService
 	var routingService net.RoutingService
 	var runService run.Service
@@ -165,6 +168,15 @@ func serverStart(port int, name string, log sio.Logger) {
 	go serve(routingService, aggregationService, kvService, routingService,
 		runService, log)
 
+	if pidfile != "" {
+		log.Info("create pidfile '%s'", log.Emph(0, pidfile))
+
+		err = sio.CreatePidfile(pidfile)
+		if err != nil {
+			fatale(err)
+		}
+	}
+
 	var c chan struct{} = nil
 	<-c  // fucking yolo
 }
@@ -186,6 +198,7 @@ func serverMain(cli ui.Cli, verbose *verbosity) {
 			}
 		},
 	}.New()
+	var pidfileOption ui.OptionString = ui.OptString{}.New()
 	var tcpOption ui.OptionInt = ui.OptInt{
 		DefaultValue: DEFAULT_TCP_PORT,
 		ValidityPredicate: func (val int) error {
@@ -204,6 +217,7 @@ func serverMain(cli ui.Cli, verbose *verbosity) {
 	cli.DelOption('h', "help")
 	cli.AddOption('h', "help", helpOption)
 	cli.AddOption('n', "name", nameOption)
+	cli.AddOption('p', "pidfile", pidfileOption)
 	cli.AddLongOption("tcp", tcpOption)
 
 	err = cli.Parse()
@@ -215,6 +229,7 @@ func serverMain(cli ui.Cli, verbose *verbosity) {
 	if ok {
 		fatal("unexpected operand: %s", op)
 	}
-	
-	serverStart(tcpOption.Value(), nameOption.Value(), verbose.log())
+
+	serverStart(tcpOption.Value(), nameOption.Value(),
+		pidfileOption.Value(), verbose.log())
 }
