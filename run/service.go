@@ -258,6 +258,21 @@ func (this *serviceProcess) run() {
 	var err error
 	var i int
 
+	if this.req.name == "" {
+		this.log.Trace("receive client executable")
+		err = this.receiveExecutable()
+		if err != nil {
+			this.log.Warn("%s", err.Error())
+			return
+		}
+
+		name = this.tempExec.Name()
+
+		defer os.Remove(name)
+	} else {
+		name = this.req.name
+	}
+
 	view = this.parent.view.Snapshot()
 
 	meta.name = this.parent.name
@@ -273,21 +288,6 @@ func (this *serviceProcess) run() {
 	this.conn.Send() <- net.MessageProtocol{
 		M: &meta,
 		P: protocol,
-	}
-
-	if this.req.name == "" {
-		this.log.Trace("receive client executable")
-		err = this.receiveExecutable()
-		if err != nil {
-			this.log.Warn("%s", err.Error())
-			return
-		}
-
-		name = this.tempExec.Name()
-
-		defer os.Remove(name)
-	} else {
-		name = this.req.name
 	}
 
 	name, err = kv.Format(view, name)
